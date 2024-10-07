@@ -1,0 +1,10 @@
+model {
+for(i in 1:N){
+moral[i]~dnorm(mu[i], tau)
+mu[i]<-alpha + beta1*hetero[i] + beta2*mobility[i]
+}
+alpha~dnorm(0, .01)
+beta1~dunif(-100000,100000)
+beta2~dunif(-100000,100000)
+tau~dgamma(.01,.01)
+}

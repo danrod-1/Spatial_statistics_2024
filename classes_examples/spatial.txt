@@ -1,0 +1,22 @@
+model{
+	for(i in 1:N){
+		Z[i]~dnorm(mu[i],tauz)
+		mu[i]<-betaX*X[i]+betaY*Y[i]+W[i]
+		muw[i]<-alfa
+	}
+	for(i in 1:N){
+		for(j in 1:N){
+			### Exponential correlation D is the distance matrix
+			R[i,j]<-exp(-phi*D[i,j])
+		}
+	}
+	Q<-tauw*inverse(R)
+	W[1:N]~dmnorm(muw,Q)
+	### priors
+	alfa~dnorm(0,0.001)
+	betaX~dnorm(0,0.001)
+	betaY~dnorm(0,0.001)
+	tauz~dgamma(az,bz)
+	tauw~dgamma(aw,bw)
+	phi~dnorm(0.001,1)T(0,)
+	}
