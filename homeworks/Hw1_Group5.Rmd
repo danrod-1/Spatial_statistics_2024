@@ -1,0 +1,195 @@
+---
+title: "HW1 Group 5"
+author: "Daniil Rodionov, Hugo Aubert"
+---
+
+# Exercise 1
+
+
+```{r message=FALSE, warning=FALSE, include=FALSE}
+rm(list=ls())
+suppressWarnings(suppressPackageStartupMessages(require(MASS)))
+suppressWarnings(suppressPackageStartupMessages(require(MBA)))
+suppressWarnings(suppressPackageStartupMessages(require(gstat)))
+suppressWarnings(suppressPackageStartupMessages(require(sf)))
+suppressWarnings(suppressPackageStartupMessages(require(geoR)))
+suppressWarnings(suppressPackageStartupMessages(require(ggplot2)))
+
+data("wolfcamp")
+
+```
+
+
+Geodata class is not accepted by gstat, hence we need to convert it to sf.
+```{r}
+wolfcamp_sf <- st_as_sf(data.frame(X1 = wolfcamp$coords[, 1], X2 = wolfcamp$coords[, 2],
+                                   values = wolfcamp$data), coords = c("X1", "X2"))
+```
+
+
+CV function. Here we use leave-one-out CV with standardized errors.
+```{r}
+idw_loocv <- function(data, p) {
+  n <- nrow(data)  
+  errors <- numeric(n)
+  
+  for (i in 1:n) {
+    
+    train_data <- data[-i, ] 
+    test_data <- data[i, , drop = FALSE]  # drop = False, so that it does not collapse into a vector/point
+    
+    idw_model <- gstat(
+      formula = values ~ 1, #~1 because we do not have any auxiliary variables
+      locations = train_data, 
+      set = list(idp = p)  #sets p
+    )
+    
+    
+    idw_prediction <- predict(idw_model, newdata = test_data)
+    errors[i] <- ((idw_prediction$var1.pred - test_data$values) / sd(train_data$values))^2
+  }
+  
+  return(mean(errors))
+}
+```
+
+
+Here we run LOOCV over a range of possible values for p and find the optimal one.
+```{r message=FALSE, warning=FALSE, include=FALSE}
+
+p_values <- seq(0.2, 10, by = 0.2)
+cv_scores <- sapply(p_values, function(p) idw_loocv(wolfcamp_sf, p))
+optimal_p <- p_values[which.min(cv_scores)]
+optimal_cv <- min(cv_scores)
+
+print(optimal_p)
+```
+
+
+
+The same represented on a graph
+```{r echo=TRUE, fig.height=6, fig.width=8}
+cv_data <- data.frame(
+  p_values = p_values,  
+  cv_scores = cv_scores 
+)
+
+ggplot(cv_data, aes(x = p_values, y = cv_scores)) +             
+  geom_point(color = "blue", size = 2) +           
+  geom_point(aes(x = optimal_p, y = optimal_cv), color = "red", size = 3) +
+  labs(title = "Cross-Validation Score for Different p Values",
+       x = "p",
+       y = "CV") +
+  theme_minimal()  
+```
+
+# Exercise2
+
+First, we create 20x20 grid from min to max.
+```{r}
+coords <- st_coordinates(wolfcamp_sf)
+
+
+x_range <- seq(min(coords[, 1]), max(coords[, 1]), length.out = 20)
+y_range <- seq(min(coords[, 2]), max(coords[, 2]), length.out = 20)
+
+grid <- expand.grid(X1 = x_range, X2 = y_range)
+
+grid_sf <- st_as_sf(grid, coords = c("X1", "X2"))
+```
+
+
+Then we find interpolated values for grid points. For IDW the optimal p is used. For Splines default hyperparameters n, m, h are used.
+
+```{r message=FALSE, warning=FALSE, include=FALSE}
+idw_model <- gstat(
+  formula = values ~ 1, 
+  locations = wolfcamp_sf, 
+  set = list(idp = optimal_p)  
+)
+
+idw_prediction <- predict(idw_model, newdata = grid_sf)
+
+
+grid_sf$values <- idw_prediction$var1.pred
+```
+```{r}
+mba_result <- mba.surf(
+  cbind(wolfcamp$coords[, 1], wolfcamp$coords[, 2], wolfcamp$data), 
+  no.X = 20,  
+  no.Y = 20,
+  extend = TRUE  
+)
+```
+
+
+LOOCV for splines. Very similar to the one for IDW. The error is lower than the one for optimal p in the IDW model.
+
+
+```{r message=FALSE, warning=FALSE, include=FALSE}
+
+#another conversion. Has to be done for compatibility
+wolfcamp_df <- data.frame(
+  X1 = wolfcamp$coords[, 1], 
+  X2 = wolfcamp$coords[, 2], 
+  values = wolfcamp$data
+)
+
+bspline_loocv <- function(data) {
+  n <- nrow(data)
+  errors <- numeric(n)
+  
+  data_matrix <- as.matrix(data)  # Ensure it's a matrix
+  
+  for (i in 1:n) {
+    train_matrix <- data_matrix[-i, ]
+    test_data <- data_matrix[i, , drop = FALSE] 
+    
+    test_prediction <- mba.points(
+      xyz = train_matrix, 
+      xy.est = matrix(c(test_data[1], test_data[2]), ncol = 2)
+    )
+    
+
+    predicted_value <- test_prediction$xyz.est[3]  
+    
+    errors[i] <- ((predicted_value - test_data[3]) / sd(train_matrix[, 3]))^2
+  }
+  
+  return(mean(errors))
+}
+
+cv_bspline <- bspline_loocv(wolfcamp_df)
+
+```
+
+```{r echo=FALSE}
+# Print comparison of cross-validation errors
+cat("B-spline model is marginally better:\n")
+cat("B-spline Cross-Validation Error: ", cv_bspline, "\n")
+cat("IDW Cross-Validation Error (Optimal p = ", optimal_p, "): ", optimal_cv, "\n")
+```
+Graphically, interpolated surfaces look rather similar. B-splines model produces surface which looks "smoother", "less bumpy".
+
+```{r}
+#for plotting
+idw_matrix <- matrix(grid_sf$values, nrow = 20, ncol = 20)
+
+par(mfrow = c(1, 2))
+
+persp(
+  x = x_range, y = y_range, z = idw_matrix,
+  theta = 50, phi = 40, col = "lightgreen",
+  xlab = "X1", ylab = "X2", zlab = "Values",
+  main = "IDW Interpolation"
+)
+
+persp(
+  x = mba_result$xyz.est$x, y = mba_result$xyz.est$y, z = mba_result$xyz.est$z,
+  theta = 50, phi = 40, col = "lightblue",
+  xlab = "X1", ylab = "X2", zlab = "Values",
+  main = "B-Spline Interpolation"
+)
+
+```
+
