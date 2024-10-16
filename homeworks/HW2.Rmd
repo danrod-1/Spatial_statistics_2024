@@ -1,0 +1,184 @@
+---
+title: "Homework 2"
+output: html_document
+author: "Daniil Rodionov, Hugo Aubert"
+date: "2024-10-16"
+---
+
+List of the useful packages
+
+```{r message=FALSE, warning=FALSE, include=FALSE}
+suppressWarnings(suppressPackageStartupMessages(require(MASS)))
+suppressWarnings(suppressPackageStartupMessages(require(MBA)))
+suppressWarnings(suppressPackageStartupMessages(require(gstat)))
+suppressWarnings(suppressPackageStartupMessages(require(sf)))
+suppressWarnings(suppressPackageStartupMessages(require(geoR)))
+suppressWarnings(suppressPackageStartupMessages(require(ggplot2)))
+suppressWarnings(suppressPackageStartupMessages(require(corrplot)))
+suppressWarnings(suppressPackageStartupMessages(require(dplyr)))
+```
+
+# Question 1
+
+## Summary of the dataset
+
+```{r}
+summary(shrimpsdata)
+```
+## Histogram for the differents variable of the dataset 
+
+```{r}
+par(mfrow = c(2, 2))
+for (var in names(shrimpsdata)) {
+  hist(shrimpsdata[[var]], 
+       main = paste("Histogramme de", var), 
+       xlab = var, 
+       col = "lightblue", 
+       border = "black")
+}
+```
+## Boxplot for the differents variables of the dataset
+
+```{r}
+par(mfrow = c(1, 2))
+for (var in names(shrimpsdata)) {
+  boxplot(shrimpsdata[[var]], 
+       main = paste("Boxplot de", var), 
+       xlab = var, 
+       col = "lightblue", 
+       border = "black")
+}
+```
+
+## Correlation Matrix of the different variable of the dataset
+
+```{r}
+cor_matrix <- cor(shrimpsdata)
+corrplot(cor_matrix, method = "color", tl.col = "black", tl.srt = 45,
+         col = colorRampPalette(c("blue", "white", "red"))(200),
+         addCoef.col = "black", 
+         number.cex = 0.35,
+         title = "Corrélation entre 'tot' et les autres variables")
+```
+
+
+## Correlation Matrix for the variable tot and the other variable of the dataset
+
+```{r}
+cor_matrix <- cor(shrimpsdata)
+cor_tot <- cor_matrix[,"tot", drop = FALSE]
+cor_tot <- t(cor_tot)
+corrplot(cor_tot, method = "color", tl.col = "black", tl.srt = 45,
+         col = colorRampPalette(c("blue", "white", "red"))(200),
+         addCoef.col = "black", 
+         number.cex = 0.55,
+         title = "Corrélation entre 'tot' et les autres variables")
+
+```
+# Question 2
+
+## Create a sf object with the shrimpsdata set 
+```{r}
+shrimpsdata_sf <- st_as_sf(data.frame(X1 = shrimpsdata$X, X2 = shrimpsdata$Y,
+                                   values = shrimpsdata$tot), coords = c("X1", "X2"))
+```
+
+## CV function. Here we use leave-one-out CV with standardized errors.
+```{r}
+idw_loocv <- function(data, p) {
+  n <- nrow(data)  
+  errors <- numeric(n)
+  
+  for (i in 1:n) {
+    
+    train_data <- data[-i, ] 
+    test_data <- data[i, , drop = FALSE]  # drop = False, so that it does not collapse into a vector/point
+    
+    idw_model <- gstat(
+      formula = values ~ 1, #~1 because we do not have any auxiliary variables
+      locations = train_data, 
+      set = list(idp = p)  #sets p
+    )
+    
+    
+    idw_prediction <- predict(idw_model, newdata = test_data)
+    errors[i] <- ((idw_prediction$var1.pred - test_data$values) / sd(train_data$values))^2
+  }
+  
+  return(mean(errors))
+}
+```
+
+## Find the optimal P for IDW Model
+
+```{r message=FALSE, warning=FALSE, include=FALSE}
+
+p_values <- seq(0.5, 3, by = 0.5)
+cv_scores <- sapply(p_values, function(p) idw_loocv(shrimpsdata_sf, p))
+optimal_p <- p_values[which.min(cv_scores)]
+optimal_cv <- min(cv_scores)
+
+print(optimal_p)
+```
+
+The same represented on a graph
+```{r echo=TRUE, fig.height=6, fig.width=8}
+cv_data <- data.frame(
+  p_values = p_values,  
+  cv_scores = cv_scores 
+)
+
+ggplot(cv_data, aes(x = p_values, y = cv_scores)) +             
+  geom_point(color = "blue", size = 2) +           
+  geom_point(aes(x = optimal_p, y = optimal_cv), color = "red", size = 3) +
+  labs(title = "Cross-Validation Score for Different p Values",
+       x = "p",
+       y = "CV") +
+  theme_minimal()  
+```
+# Question 3 
+
+## create 20x20 grid from min to max.
+```{r}
+coords <- st_coordinates(shrimpsdata_sf)
+
+
+x_range <- seq(min(coords[, 1]), max(coords[, 1]), length.out = 20)
+y_range <- seq(min(coords[, 2]), max(coords[, 2]), length.out = 20)
+
+grid <- expand.grid(X1 = x_range, X2 = y_range)
+
+grid_sf <- st_as_sf(grid, coords = c("X1", "X2"))
+```
+
+Then we find interpolated values for grid points. For IDW the optimal p is used. For Splines default hyperparameters n, m, h are used.
+
+```{r message=FALSE, warning=FALSE, include=FALSE}
+idw_model <- gstat(
+  formula = values ~ 1, 
+  locations = shrimpsdata_sf, 
+  set = list(idp = optimal_p)  
+)
+
+idw_prediction <- predict(idw_model, newdata = grid_sf)
+
+
+grid_sf$values <- idw_prediction$var1.pred
+
+cat("IDW Cross-Validation Error (Optimal p = ", optimal_p, "): ", optimal_cv, "\n")
+```
+
+```{r}
+#for plotting
+idw_matrix <- matrix(grid_sf$values, nrow = 20, ncol = 20)
+
+par(mfrow = c(1, 2))
+
+persp(
+  x = x_range, y = y_range, z = idw_matrix,
+  theta = 50, phi = 40, col = "lightgreen",
+  xlab = "X1", ylab = "X2", zlab = "Values",
+  main = "IDW Interpolation"
+)
+```
+
