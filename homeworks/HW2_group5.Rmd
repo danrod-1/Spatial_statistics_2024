@@ -1,0 +1,361 @@
+---
+title: "HW2_Group5"
+output: html_document
+author: "Daniil Rodionov, Hugo Aubert"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+rm(list=ls())
+suppressWarnings(suppressPackageStartupMessages(require(MASS)))
+suppressWarnings(suppressPackageStartupMessages(require(MBA)))
+suppressWarnings(suppressPackageStartupMessages(require(gstat)))
+suppressWarnings(suppressPackageStartupMessages(require(sf)))
+suppressWarnings(suppressPackageStartupMessages(require(geoR)))
+suppressWarnings(suppressPackageStartupMessages(require(ggplot2)))
+suppressWarnings(suppressPackageStartupMessages(require(corrplot)))
+suppressWarnings(suppressPackageStartupMessages(require(dplyr)))
+
+```
+
+```{r}
+load("C:/DS/Spatial_statistics/data/shrimpsfull.RData")
+load("C:/DS/Spatial_statistics/data/AllGrids.RData")
+
+```
+
+```{r}
+data <- shrimpsdata[shrimpsdata$ANNO %in% c(1997, 2006), ]
+data_1997 <- data[data$ANNO == 1997, ]
+data_2006 <- data[data$ANNO == 2006, ]
+```
+
+## Exercise 1
+
+First, basic summaries
+
+```{r}
+summary(data_1997)
+```
+
+
+```{r}
+summary(data_2006)
+```
+
+
+```{r}
+summary(data)
+
+```
+
+Second, frequencies
+
+```{r}
+variables <- setdiff(names(data_1997), "ANNO")
+
+
+par(mfrow = c(2, 2))
+for (var in variables) {
+  hist(data[[var]], 
+       main = paste("Histogram", var), 
+       xlab = var, 
+       col = "lightblue", 
+       border = "black")
+}
+
+
+
+
+```
+
+```{r}
+
+par(mfrow = c(2, 2))
+for (var in variables) {
+  hist(data_1997[[var]], 
+       main = paste("1997 Histogram", var), 
+       xlab = var, 
+       col = "lightblue", 
+       border = "black")
+}
+
+```
+
+```{r}
+par(mfrow = c(2, 2))
+for (var in variables) {
+  hist(data_2006[[var]], 
+       main = paste("2006 Histogram", var), 
+       xlab = var, 
+       col = "lightblue", 
+       border = "black")
+}
+
+```
+Third, correlations
+
+```{r}
+old_par <- par(no.readonly = TRUE)
+
+par(mar = c(5, 5, 5, 5))  
+
+
+options(repr.plot.width = 18, repr.plot.height = 18)  
+
+
+cor_matrix <- cor(data)
+
+
+corrplot(cor_matrix, 
+         method = "color", 
+         tl.col = "black", 
+         tl.cex = 0.7,   
+         tl.srt = 45,    
+         col = colorRampPalette(c("blue", "white", "red"))(200), 
+         addCoef.col = "black",
+         number.cex = 0.3,        
+         title = "Correlation between 'tot' and other variables",
+         mar = c(0, 0, 2, 0))     
+
+par(old_par)
+
+```
+
+
+```{r}
+
+data_1997_no_ANNO <- data_1997[, !(names(data_1997) %in% "ANNO")]
+
+
+old_par <- par(no.readonly = TRUE)
+
+par(mar = c(5, 5, 5, 5))  
+
+options(repr.plot.width = 18, repr.plot.height = 18)  
+
+cor_matrix_1997 <- cor(data_1997_no_ANNO)
+
+corrplot(cor_matrix_1997, 
+         method = "color", 
+         tl.col = "black", 
+         tl.cex = 0.7,   
+         tl.srt = 45,    
+         col = colorRampPalette(c("blue", "white", "red"))(200),  
+         addCoef.col = "black",    
+         number.cex = 0.3,         
+         title = "Correlation for 'data_1997' (without 'ANNO')",
+         mar = c(0, 0, 2, 0))      
+
+
+par(old_par)
+
+```
+
+```{r}
+
+data_2006_no_ANNO <- data_2006[, !(names(data_2006) %in% "ANNO")]
+
+old_par <- par(no.readonly = TRUE)
+
+par(mar = c(5, 5, 5, 5))
+
+options(repr.plot.width = 18, repr.plot.height = 18)
+
+cor_matrix_2006 <- cor(data_2006_no_ANNO)
+
+corrplot(cor_matrix_2006, 
+         method = "color", 
+         tl.col = "black", 
+         tl.cex = 0.7,   
+         tl.srt = 45,    
+         col = colorRampPalette(c("blue", "white", "red"))(200), 
+         addCoef.col = "black",    
+         number.cex = 0.3,  
+         title = "Correlation for 'data_2006' (without 'ANNO')",
+         mar = c(0, 0, 2, 0)) 
+
+par(old_par)
+
+```
+
+```{r}
+
+cor_tot_1997 <- cor_matrix_1997[, "tot", drop = FALSE]
+cor_tot_1997 <- t(cor_tot_1997)  
+
+corrplot(cor_tot_1997, method = "color", tl.col = "black", tl.srt = 45, 
+         col = colorRampPalette(c("blue", "white", "red"))(200),  
+         addCoef.col = "black", 
+         number.cex = 0.55,     
+         title = "Correlation between 'tot' and other variables in 1997",
+         mar = c(0, 0, 2, 0))    
+
+```
+```{r}
+
+cor_tot_2006 <- cor_matrix_2006[, "tot", drop = FALSE]
+cor_tot_2006 <- t(cor_tot_2006) 
+
+corrplot(cor_tot_2006, method = "color", tl.col = "black", tl.srt = 45, 
+         col = colorRampPalette(c("blue", "white", "red"))(200), 
+         addCoef.col = "black",  
+         number.cex = 0.55, 
+         title = "Correlation between 'tot' and other variables in 2006",
+         mar = c(0, 0, 2, 0)) 
+
+```
+
+```{r}
+
+cor_tot <- cor_matrix[, "tot", drop = FALSE]
+cor_tot <- t(cor_tot)  
+
+
+corrplot(cor_tot, method = "color", tl.col = "black", tl.srt = 45, 
+         col = colorRampPalette(c("blue", "white", "red"))(200),  
+         addCoef.col = "black", 
+         number.cex = 0.55,       
+         title = "Correlation between 'tot' and other variables",
+         mar = c(0, 0, 2, 0))   
+```
+
+
+Overall, we can see that tot is strongly correlated with Spawners and Recruits which is an obvious conclusion since all three indicate the number of shrimps in the area. Salinity and temperature are also correlated with tot but correlation is not as strong. Bat, dist and slope seem to be even less relevant. It can also be seen that total mass increased over time. It is overall hard identify good predictors other than Spawners and Recruits, but these two are literally the same as tot - it is like predicting total number of people in the area by number of adults and kids. 
+
+
+
+## Exercise 2
+
+Copied from Hw1
+
+```{r}
+data_sf <- st_as_sf(data.frame(X1 = data$X, X2 = data$Y,
+                                   values = data$tot), coords = c("X1", "X2"))
+
+data_1997_sf <- st_as_sf(data.frame(X1 = data_1997$X, X2 = data_1997$Y,
+                                   values = data_1997$tot), coords = c("X1", "X2"))
+
+data_2006_sf <- st_as_sf(data.frame(X1 = data_2006$X, X2 = data_2006$Y,
+                                   values = data_2006$tot), coords = c("X1", "X2"))
+
+```
+
+```{r}
+idw_loocv <- function(data, p) {
+  n <- nrow(data)  
+  errors <- numeric(n)
+  
+  for (i in 1:n) {
+    
+    train_data <- data[-i, ] 
+    test_data <- data[i, , drop = FALSE]  # drop = False, so that it does not collapse into a vector/point
+    
+    idw_model <- gstat(
+      formula = values ~ 1, #~1 because we do not have any auxiliary variables
+      locations = train_data, 
+      set = list(idp = p)  #sets p
+    )
+    
+    
+    idw_prediction <- predict(idw_model, newdata = test_data)
+    errors[i] <- ((idw_prediction$var1.pred - test_data$values) / sd(train_data$values))^2
+  }
+  
+  return(mean(errors))
+}
+```
+
+```{r message=FALSE, warning=FALSE, include=FALSE}
+p_values <- seq(0.5, 5, by = 0.5)
+cv_scores <- sapply(p_values, function(p) idw_loocv(data_sf, p))
+optimal_p <- p_values[which.min(cv_scores)]
+optimal_cv <- min(cv_scores)
+```
+
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+print(optimal_p)
+```
+
+```{r message=FALSE, warning=FALSE, include=FALSE}
+
+p_values <- seq(0.5, 5, by = 0.5)
+cv_scores <- sapply(p_values, function(p) idw_loocv(data_1997_sf, p))
+optimal_p_1997 <- p_values[which.min(cv_scores)]
+optimal_cv_1997 <- min(cv_scores)
+```
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+print(optimal_p_1997)
+```
+
+```{r message=FALSE, warning=FALSE, include=FALSE}
+p_values <- seq(0.5, 5, by = 0.5)
+cv_scores <- sapply(p_values, function(p) idw_loocv(data_2006_sf, p))
+optimal_p_2006 <- p_values[which.min(cv_scores)]
+optimal_cv_2006 <- min(cv_scores)
+```
+
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+print(optimal_p_2006)
+```
+
+
+## Exercise 3
+
+```{r include=FALSE}
+
+grid_1997_sf <- st_as_sf(data.frame(X = grid_1997$X, Y = grid_1997$Y), coords = c("X", "Y"))
+
+idw_model_1997 <- gstat::gstat(formula = tot ~ 1, locations = ~ X + Y, data = data_1997, set = list(idp = optimal_p_1997))
+
+idw_prediction_1997 <- predict(idw_model_1997, newdata = grid_1997_sf)
+
+grid_1997$predicted_tot <- idw_prediction_1997$var1.pred
+```
+
+
+```{r}
+ggplot(grid_1997, aes(x = X, y = Y)) +
+  geom_tile(aes(fill = predicted_tot)) +
+  scale_fill_viridis_c() +
+  labs(title = "Predicted Total Biomass for 1997 using IDW",
+       fill = "Total Biomass") +
+  theme_minimal()
+
+
+```
+
+```{r include=FALSE}
+
+grid_2006_sf <- st_as_sf(data.frame(X = grid_2006$X, Y = grid_2006$Y), coords = c("X", "Y"))
+
+idw_model_2006 <- gstat::gstat(formula = tot ~ 1, locations = ~ X + Y, data = data_2006, set = list(idp = optimal_p_2006))
+
+idw_prediction_2006 <- predict(idw_model_2006, newdata = grid_2006_sf)
+
+grid_2006$predicted_tot <- idw_prediction_2006$var1.pred
+```
+
+
+```{r}
+ggplot(grid_2006, aes(x = X, y = Y)) +
+  geom_tile(aes(fill = predicted_tot)) +
+  scale_fill_viridis_c() +
+  labs(title = "Predicted Total Biomass for 1997 using IDW",
+       fill = "Total Biomass") +
+  theme_minimal()
+
+
+```
+
+
+
+
+
+

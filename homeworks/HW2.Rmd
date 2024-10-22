@@ -8,6 +8,7 @@ date: "2024-10-16"
 List of the useful packages
 
 ```{r message=FALSE, warning=FALSE, include=FALSE}
+rm(list=ls())
 suppressWarnings(suppressPackageStartupMessages(require(MASS)))
 suppressWarnings(suppressPackageStartupMessages(require(MBA)))
 suppressWarnings(suppressPackageStartupMessages(require(gstat)))
@@ -23,6 +24,7 @@ suppressWarnings(suppressPackageStartupMessages(require(dplyr)))
 ## Summary of the dataset
 
 ```{r}
+load("data/shrimpsfull.RData")
 summary(shrimpsdata)
 ```
 ## Histogram for the differents variable of the dataset 
