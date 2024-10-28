@@ -1,0 +1,186 @@
+---
+title: "Homework 2"
+output: html_document
+author: "Daniil Rodionov, Hugo Aubert"
+date: "2024-10-25"
+---
+
+```{r}
+rm(list = ls())
+```
+
+
+List of the useful packages
+
+```{r message=FALSE, warning=FALSE, include=FALSE}
+suppressWarnings(suppressPackageStartupMessages(require(MASS)))
+suppressWarnings(suppressPackageStartupMessages(require(MBA)))
+suppressWarnings(suppressPackageStartupMessages(require(gstat)))
+suppressWarnings(suppressPackageStartupMessages(require(sf)))
+suppressWarnings(suppressPackageStartupMessages(require(geoR)))
+suppressWarnings(suppressPackageStartupMessages(require(ggplot2)))
+suppressWarnings(suppressPackageStartupMessages(require(corrplot)))
+suppressWarnings(suppressPackageStartupMessages(require(dplyr)))
+suppressWarnings(suppressPackageStartupMessages(require(sp)))
+suppressWarnings(suppressPackageStartupMessages(require(RColorBrewer)))
+```
+
+```{r}
+data(wolfcamp)
+plot(wolfcamp)
+summary(wolfcamp)
+```
+```{r}
+vv <- variog(wolfcamp, max.dist = "250")
+plot(vv,type="b")
+```
+We can observe that the Variogram shows a linear relation between the Semi-Variance and the Distance until a distance = 250
+we can suppose a stationnary model between the distance 0 and 250 so we can apply a trend = 1st and compare the variogram to
+know model. 
+
+```{r}
+# Choose the Variogram model
+vv <- variog(wolfcamp,trend = "1st", max.dist = "250")
+plot(vv,type="b")
+
+vv.exp <- likfit(wolfcamp,trend = "1st", cov.model = "exponential",ini.cov.pars = c(2000,100))
+lines(vv.exp, col = "red")
+
+vv.sph <- likfit(wolfcamp, trend = "1st", cov.model = "spherical", ini.cov.pars = c(2000,100))
+lines(vv.sph, col = "blue")
+
+vv.gau <- likfit(wolfcamp, trend = "1st", cov.model = "gaussian", ini.cov.pars = c(2000,100))
+lines(vv.gau, col = "green")
+
+legend("topleft", legend = c("Exponential", "Spherical", "Gaussian"), 
+       col = c("red", "blue", "green"), lty = 1, bty = "n")
+```
+```{r}
+# Modèle sphérique
+vv.sph
+summary(vv.sph)
+
+# Modèle exponentiel
+vv.exp
+summary(vv.exp)
+
+# Modèle gaussien
+vv.gau
+summary(vv.gau)
+```
+
+According to the different summaries, we can observe that the exponential model fits the best with our variogram. Indeed, it has the highest maximized log-likelihood value (-454.9), along with the lowest AIC (927.9) and BIC (949.8), indicating the best balance between fit accuracy and model complexity. Additionally, the exponential model’s parameters suggest a tighter spatial correlation, with a smaller range parameter (phi = 21.23) and a relatively low nugget effect (519.8), making it particularly suitable for capturing the spatial dependencies within our dataset.
+
+```{r}
+mse_exp <- mse_sph <- mse_gau <- numeric(nrow(wolfcamp$coords))
+
+# Boucle pour la validation croisée leave-one-out
+for (i in 1:nrow(wolfcamp$coords)) {
+    # Retrait du point i pour créer un ensemble de données LOO
+    loo_coords <- wolfcamp$coords[-i, ]
+    loo_data <- wolfcamp$data[-i]
+    loo_wolfcamp <- as.geodata(data.frame(coords = loo_coords, data = loo_data))
+    
+    # Ajustement de chaque modèle sur les données LOO
+    fit_exp <- likfit(loo_wolfcamp, trend = "1st", cov.model = "exponential", ini.cov.pars = c(2000,100))
+    fit_sph <- likfit(loo_wolfcamp, trend = "1st", cov.model = "spherical", ini.cov.pars = c(2000,100))
+    fit_gau <- likfit(loo_wolfcamp, trend = "1st", cov.model = "gaussian", ini.cov.pars = c(2000,100))
+    
+    # Prédiction pour le point retiré
+    pred_exp <- krige.conv(geodata = loo_wolfcamp, locations = wolfcamp$coords[i, , drop = FALSE], krige = krige.control(obj.model = fit_exp))$predict
+    pred_sph <- krige.conv(geodata = loo_wolfcamp, locations = wolfcamp$coords[i, , drop = FALSE], krige = krige.control(obj.model = fit_sph))$predict
+    pred_gau <- krige.conv(geodata = loo_wolfcamp, locations = wolfcamp$coords[i, , drop = FALSE], krige = krige.control(obj.model = fit_gau))$predict
+    
+    # Calcul de l'erreur quadratique pour le point i
+    mse_exp[i] <- sqrt((wolfcamp$data[i] - pred_exp)^2)
+    mse_sph[i] <- sqrt((wolfcamp$data[i] - pred_sph)^2)
+    mse_gau[i] <- sqrt((wolfcamp$data[i] - pred_gau)^2)
+}
+
+# Calcul de la MSE moyenne pour chaque modèle
+mean_mse_exp <- mean(mse_exp)
+mean_mse_sph <- mean(mse_sph)
+mean_mse_gau <- mean(mse_gau)
+```
+
+```{r}
+# Résultats
+cat("Exponential MSE moyenne:", mean_mse_exp, "\n")
+cat("Spherical MSE moyenne:", mean_mse_sph, "\n")
+cat("Gaussian MSE moyenne:", mean_mse_gau, "\n")
+```
+
+Moreover, the RMSE of our exponential model is a little bit more than the Spherical and Gaussian model but not far from their value. 
+
+Question 2
+
+```{r}
+grid <- expand.grid(
+  x = seq(min(wolfcamp$coords[,1]), max(wolfcamp$coords[,1])),
+  y = seq(min(wolfcamp$coords[,2]), max(wolfcamp$coords[,2]))
+)
+
+kriging_result_sph <- krige.conv(wolfcamp, 
+                             locations = grid, 
+                             krige = krige.control(obj.model = vv.sph))
+image(kriging_result_sph, main = "Kriging Interpolation (Spherical Model)")
+points(wolfcamp$coords, col = "red", pch = 16)
+
+kriging_result_gau <- krige.conv(wolfcamp, 
+                             locations = grid, 
+                             krige = krige.control(obj.model = vv.gau))
+image(kriging_result_gau, main = "Kriging Interpolation (Gaussian Model)")
+points(wolfcamp$coords, col = "red", pch = 16)
+
+kriging_result_exp <- krige.conv(wolfcamp, 
+                             locations = grid, 
+                             krige = krige.control(obj.model = vv.exp))
+image(kriging_result_exp, main = "Kriging Interpolation (Exponential Model)")
+points(wolfcamp$coords, col = "red", pch = 16)
+
+```
+```{r}
+# Préparation des variables pour stocker les erreurs
+errors_sph <- numeric(nrow(wolfcamp$coords))
+errors_gau <- numeric(nrow(wolfcamp$coords))
+errors_exp <- numeric(nrow(wolfcamp$coords))
+
+# Boucle de validation croisée leave-one-out
+for (i in 1:nrow(wolfcamp$coords)) {
+  
+  # Créer des sous-ensembles sans le point "i"
+  coords_loo <- wolfcamp$coords[-i, , drop = FALSE]
+  data_loo <- wolfcamp$data[-i]
+  
+  # Krigeage sur les données restantes sans le point "i"
+  kriging_result_sph <- krige.conv(geodata = list(coords = coords_loo, data = data_loo), 
+                                   locations = wolfcamp$coords[i, , drop = FALSE],
+                                   krige = krige.control(obj.model = vv.sph))
+  
+  kriging_result_gau <- krige.conv(geodata = list(coords = coords_loo, data = data_loo), 
+                                   locations = wolfcamp$coords[i, , drop = FALSE],
+                                   krige = krige.control(obj.model = vv.gau))
+  
+  kriging_result_exp <- krige.conv(geodata = list(coords = coords_loo, data = data_loo), 
+                                   locations = wolfcamp$coords[i, , drop = FALSE],
+                                   krige = krige.control(obj.model = vv.exp))
+  
+  # Calculer les erreurs de prédiction pour chaque modèle
+  errors_sph[i] <- wolfcamp$data[i] - kriging_result_sph$predict
+  errors_gau[i] <- wolfcamp$data[i] - kriging_result_gau$predict
+  errors_exp[i] <- wolfcamp$data[i] - kriging_result_exp$predict
+}
+
+```
+
+```{r}
+# Calcul du RMSE pour chaque modèle
+rmse_sph <- sqrt(mean(errors_sph^2))
+cat("RMSE Modèle Sphérique (LOOCV):", rmse_sph, "\n")
+
+rmse_gau <- sqrt(mean(errors_gau^2))
+cat("RMSE Modèle Gaussien (LOOCV):", rmse_gau, "\n")
+
+rmse_exp <- sqrt(mean(errors_exp^2))
+cat("RMSE Modèle Exponentiel (LOOCV):", rmse_exp, "\n")
+```
