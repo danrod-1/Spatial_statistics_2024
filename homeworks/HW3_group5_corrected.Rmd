@@ -1,13 +1,12 @@
 ---
-title: "Homework 3"
+title: "Homework 3, v2"
 output: html_document
 author: "Daniil Rodionov, Hugo Aubert"
-date: "2024-10-25"
+date: "2024-10-31"
 ---
 
 ```{r}
 rm(list = ls())
-options(warn = -1)
 ```
 
 List of the useful packages
@@ -25,7 +24,7 @@ suppressWarnings(suppressPackageStartupMessages(require(sp)))
 suppressWarnings(suppressPackageStartupMessages(require(RColorBrewer)))
 ```
 
-```{r}
+```{r warning=FALSE}
 data("wolfcamp")
 plot(wolfcamp)
 summary(wolfcamp)
@@ -142,7 +141,7 @@ model_comparison <- data.frame(
 print(model_comparison)
 ```
 
-We want to maximize LogLikelihood, minimize AIC and BIC. It looks like the speherical model is the best fit here. However, the difference is very marginal.
+We want to maximize LogLikelihood, minimize AIC and BIC. It looks like the spherical model is the best fit here. However, the difference is very marginal.
 
 ```{r warning=FALSE}
 xvalid_exp <- xvalid(wolfcamp, model = vv.exp)
@@ -162,7 +161,7 @@ print(xvalid_comparison)
 
 ```
 
-For CV, Spherical is marginally better. 
+For CV, Matern is marginally better (we want to minimize the CV). While no model is outright wrong if we need to pick one spherical seems like the best option. Yes, Matern has a better CV however the difference is so small that it may be reasonable to prioritize increased performance as measured by loglike, AIC, BIC (also small but a bit larger) 
 
 # Question 2
 
@@ -179,33 +178,17 @@ kriging_result_sph <- krige.conv(wolfcamp,
                              krige = krige.control(obj.model = vv.sph))
 image(kriging_result_sph, main = "Kriging Interpolation (Spherical Model)")
 points(wolfcamp$coords, col = "red", pch = 16)
-
-kriging_result_matern <- krige.conv(wolfcamp, 
-                             locations = grid, 
-                             krige = krige.control(obj.model = vv.matern))
-image(kriging_result_matern, main = "Kriging Interpolation (Matern Model)")
-points(wolfcamp$coords, col = "red", pch = 16)
-
-kriging_result_exp <- krige.conv(wolfcamp, 
-                             locations = grid, 
-                             krige = krige.control(obj.model = vv.exp))
-image(kriging_result_exp, main = "Kriging Interpolation (Exponential Model)")
-points(wolfcamp$coords, col = "red", pch = 16)
-
 ```
 
 
 
 ```{r warning=FALSE}
-# Extract predictions and standard errors
 predictions <- kriging_result_sph$predict
 std_errors <- sqrt(kriging_result_sph$krige.var)
 
-# Calculate 95% confidence intervals
 lower_bound <- predictions - 1.96 * std_errors
 upper_bound <- predictions + 1.96 * std_errors
 
-# Combine into a data frame for easy handling
 kriging_results <- data.frame(
   x = grid$x,
   y = grid$y,
