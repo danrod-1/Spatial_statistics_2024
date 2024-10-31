@@ -1,0 +1,194 @@
+---
+title: "Homework 3"
+output: html_document
+author: "Daniil Rodionov, Hugo Aubert"
+date: "2024-10-25"
+---
+
+```{r}
+rm(list = ls())
+```
+
+
+List of the useful packages
+
+```{r message=FALSE, warning=FALSE, include=FALSE}
+suppressWarnings(suppressPackageStartupMessages(require(MASS)))
+suppressWarnings(suppressPackageStartupMessages(require(MBA)))
+suppressWarnings(suppressPackageStartupMessages(require(gstat)))
+suppressWarnings(suppressPackageStartupMessages(require(sf)))
+suppressWarnings(suppressPackageStartupMessages(require(geoR)))
+suppressWarnings(suppressPackageStartupMessages(require(ggplot2)))
+suppressWarnings(suppressPackageStartupMessages(require(corrplot)))
+suppressWarnings(suppressPackageStartupMessages(require(dplyr)))
+suppressWarnings(suppressPackageStartupMessages(require(sp)))
+suppressWarnings(suppressPackageStartupMessages(require(RColorBrewer)))
+```
+
+```{r}
+data(wolfcamp)
+plot(wolfcamp)
+summary(wolfcamp)
+```
+# Question 1
+
+```{r}
+directions_deg <- c(0, 45, 90, 135)
+
+#we need radians for variog
+directions_rad <- directions_deg * (pi / 180)
+
+variograms <- list()
+
+for (dir in directions_rad) {
+  variograms[[paste("Direction", dir * (180 / pi))]] <- variog(wolfcamp, direction = dir)
+}
+
+plot(variograms[[1]], type = "b", main = "Directional Variograms", col = "red",
+     ylim = c(0, max(sapply(variograms, function(x) max(x$v)))))
+for (i in 2:length(directions_rad)) {
+  lines(variograms[[i]], type = "b", col = i)
+}
+
+legend("topleft", legend = paste("Direction", directions_deg, "degrees"), col = 1:length(directions_rad), lty = 1, bty = "n", adj = c(0, 0.5))
+
+
+
+```
+We can observe that the Variogram shows a linear relation between the Semi-Variance and the Distance until a distance = 250 and then goes up instead of reaching maximum (or approaching it). Also, variograms are different in different directions. Therefore, we need to use trend = 1st. 
+
+```{r message=FALSE, warning=FALSE}
+variogram_result <- variog(wolfcamp, trend = "1st")
+
+plot(variogram_result$u, variogram_result$n, type = "b",
+     main = "Number of Pairwise Comparisons per Bin",
+     xlab = "distance", ylab = "count",
+     col = "blue", pch = 16, lty = 1)
+
+grid()
+
+```
+
+
+
+
+
+```{r}
+vv <- variog(wolfcamp,trend = "1st", max.dist = 250)
+plot(vv,type="b")
+```
+
+Sadly, eyefit only works for .R not .Rmd files. Hence, its commented out here
+```{r}
+#eyefit(vv) 
+```
+
+
+```{r}
+plot(vv,type="b")
+
+vv.exp <- likfit(wolfcamp,trend = "1st", cov.model = "exponential",ini.cov.pars = c(2000,100))
+lines(vv.exp, col = "red")
+
+vv.sph <- likfit(wolfcamp, trend = "1st", cov.model = "spherical", ini.cov.pars = c(2000,100))
+lines(vv.sph, col = "blue")
+
+vv.gau <- likfit(wolfcamp, trend = "1st", cov.model = "gaussian", ini.cov.pars = c(2000,100))
+lines(vv.gau, col = "green")
+
+legend("topleft", legend = c("Exponential", "Spherical", "Gaussian"), 
+       col = c("red", "blue", "green"), lty = 1, bty = "n")
+```
+```{r}
+# Spherical
+vv.sph
+summary(vv.sph)
+
+# Exponential
+vv.exp
+summary(vv.exp)
+
+# Gaussian
+vv.gau
+summary(vv.gau)
+```
+
+
+```{r}
+summary_exp <- summary(vv.exp)
+summary_sph <- summary(vv.sph)
+summary_gau <- summary(vv.gau)
+
+loglik_exp <- summary_exp$likelihood$log.L
+aic_exp <- summary_exp$likelihood$AIC
+bic_exp <- summary_exp$likelihood$BIC
+
+loglik_sph <- summary_sph$likelihood$log.L
+aic_sph <- summary_sph$likelihood$AIC
+bic_sph <- summary_sph$likelihood$BIC
+
+loglik_gau <- summary_gau$likelihood$log.L
+aic_gau <- summary_gau$likelihood$AIC
+bic_gau <- summary_gau$likelihood$BIC
+
+model_comparison <- data.frame(
+  Model = c("Exponential", "Spherical", "Gaussian"),
+  LogLikelihood = c(loglik_exp, loglik_sph, loglik_gau),
+  AIC = c(aic_exp, aic_sph, aic_gau),
+  BIC = c(bic_exp, bic_sph, bic_gau)
+)
+
+print(model_comparison)
+```
+
+We want to maximize LogLikelihood, minimize AIC and BIC. It looks like the speherical model is the best fit here. However, the difference is very marginal.
+
+```{r}
+xvalid_exp <- xvalid(wolfcamp, model = vv.exp)
+xvalid_sph <- xvalid(wolfcamp, model = vv.sph)
+xvalid_gau <- xvalid(wolfcamp, model = vv.gau)
+
+cv_coefficient_exp <- mean(xvalid_exp$std.error^2)
+cv_coefficient_sph <- mean(xvalid_sph$std.error^2)
+cv_coefficient_gau <- mean(xvalid_gau$std.error^2)
+
+xvalid_comparison <- data.frame(
+  Model = c("Exponential", "Spherical", "Gaussian"),
+  CrossValidationCoefficient = c(cv_coefficient_exp, cv_coefficient_sph, cv_coefficient_gau)
+)
+
+print(xvalid_comparison)
+
+```
+
+For CV, Spherical is marginally better. In the next question we decided to fit all three models, since the difference is not really sufficient to pick the best one.
+
+# Question 2
+
+
+```{r}
+
+grid <- expand.grid(
+  x = seq(min(wolfcamp$coords[,1]), max(wolfcamp$coords[,1])),
+  y = seq(min(wolfcamp$coords[,2]), max(wolfcamp$coords[,2]))
+)
+
+kriging_result_sph <- krige.conv(wolfcamp, 
+                             locations = grid, 
+                             krige = krige.control(obj.model = vv.sph))
+image(kriging_result_sph, main = "Kriging Interpolation (Spherical Model)")
+points(wolfcamp$coords, col = "red", pch = 16)
+
+kriging_result_gau <- krige.conv(wolfcamp, 
+                             locations = grid, 
+                             krige = krige.control(obj.model = vv.gau))
+image(kriging_result_gau, main = "Kriging Interpolation (Gaussian Model)")
+points(wolfcamp$coords, col = "red", pch = 16)
+
+kriging_result_exp <- krige.conv(wolfcamp, 
+                             locations = grid, 
+                             krige = krige.control(obj.model = vv.exp))
+image(kriging_result_exp, main = "Kriging Interpolation (Exponential Model)")
+points(wolfcamp$coords, col = "red", pch = 16)
+
+```

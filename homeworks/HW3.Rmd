@@ -1,5 +1,5 @@
 ---
-title: "Homework 2"
+title: "Homework 3"
 output: html_document
 author: "Daniil Rodionov, Hugo Aubert"
 date: "2024-10-25"
@@ -31,16 +31,68 @@ plot(wolfcamp)
 summary(wolfcamp)
 ```
 ```{r}
-vv <- variog(wolfcamp, max.dist = "250")
-plot(vv,type="b")
+# Define the directions in degrees
+directions_deg <- c(0, 45, 90, 135)
+
+# Convert directions to radians
+directions_rad <- directions_deg * (pi / 180)
+
+# Initialize an empty list to store the variogram results
+variograms <- list()
+
+# Loop over each direction in radians and compute the variogram
+for (dir in directions_rad) {
+  variograms[[paste("Direction", dir * (180 / pi))]] <- variog(wolfcamp, direction = dir)
+}
+
+# Plot each directional variogram in a combined plot
+plot(variograms[[1]], type = "b", main = "Directional Variograms", col = "red",
+     ylim = c(0, max(sapply(variograms, function(x) max(x$v)))))
+for (i in 2:length(directions_rad)) {
+  lines(variograms[[i]], type = "b", col = i)
+}
+
+legend("topleft", legend = paste("Direction", directions_deg, "degrees"), col = 1:length(directions_rad), lty = 1, bty = "n", adj = c(0, 0.5))
+
+
+
 ```
+
+
+```{r bin-counts, message=FALSE, warning=FALSE}
+# Calculate the omnidirectional variogram with a trend
+variogram_result <- variog(wolfcamp, trend = "1st")
+
+# Plot the bin counts for each distance class
+plot(variogram_result$u, variogram_result$n, type = "b",
+     main = "Number of Pairwise Comparisons per Bin (Omnidirectional, with Trend)",
+     xlab = "distance", ylab = "count",
+     col = "blue", pch = 16, lty = 1)
+
+# Add grid lines for better readability
+grid()
+
+```
+
+
+
 We can observe that the Variogram shows a linear relation between the Semi-Variance and the Distance until a distance = 250
 we can suppose a stationnary model between the distance 0 and 250 so we can apply a trend = 1st and compare the variogram to
 know model. 
 
 ```{r}
 # Choose the Variogram model
-vv <- variog(wolfcamp,trend = "1st", max.dist = "250")
+vv <- variog(wolfcamp,trend = "1st", max.dist = 250)
+plot(vv,type="b")
+```
+
+
+```{r}
+#eyefit(vv) 
+```
+
+
+```{r}
 plot(vv,type="b")
 
 vv.exp <- likfit(wolfcamp,trend = "1st", cov.model = "exponential",ini.cov.pars = c(2000,100))
@@ -56,20 +108,71 @@ legend("topleft", legend = c("Exponential", "Spherical", "Gaussian"),
        col = c("red", "blue", "green"), lty = 1, bty = "n")
 ```
 ```{r}
-# Modèle sphérique
+# Spherical
 vv.sph
 summary(vv.sph)
 
-# Modèle exponentiel
+# Exponential
 vv.exp
 summary(vv.exp)
 
-# Modèle gaussien
+# Gaussian
 vv.gau
 summary(vv.gau)
 ```
+```{r}
+
+logLik_exp <- summary_exp$likelihood$log.L
+aic_exp <- summary_exp$likelihood$AIC
+bic_exp <- summary_exp$likelihood$BIC
+
+logLik_sph <- summary_sph$likelihood$log.L
+aic_sph <- summary_sph$likelihood$AIC
+bic_sph <- summary_sph$likelihood$BIC
+
+logLik_gau <- summary_gau$likelihood$log.L
+aic_gau <- summary_gau$likelihood$AIC
+bic_gau <- summary_gau$likelihood$BIC
+
+
+model_comparison <- data.frame(
+  Model = c("Exponential", "Spherical", "Gaussian"),
+  LogLikelihood = c(logLik_exp, logLik_sph, logLik_gau),
+  AIC = c(aic_exp, aic_sph, aic_gau),
+  BIC = c(bic_exp, bic_sph, bic_gau)
+)
+
+
+print(model_comparison)
+
+```
 
 According to the different summaries, we can observe that the exponential model fits the best with our variogram. Indeed, it has the highest maximized log-likelihood value (-454.9), along with the lowest AIC (927.9) and BIC (949.8), indicating the best balance between fit accuracy and model complexity. Additionally, the exponential model’s parameters suggest a tighter spatial correlation, with a smaller range parameter (phi = 21.23) and a relatively low nugget effect (519.8), making it particularly suitable for capturing the spatial dependencies within our dataset.
+
+
+```{r}
+# Run cross-validation and calculate the cross-validation coefficient for each model
+xvalid_exp <- xvalid(wolfcamp, model = vv.exp)
+xvalid_sph <- xvalid(wolfcamp, model = vv.sph)
+xvalid_gau <- xvalid(wolfcamp, model = vv.gau)
+
+# Calculate the cross-validation coefficient (mean of squared standardized errors)
+cv_coefficient_exp <- mean(xvalid_exp$std.error^2)
+cv_coefficient_sph <- mean(xvalid_sph$std.error^2)
+cv_coefficient_gau <- mean(xvalid_gau$std.error^2)
+
+# Combine results into a data frame for comparison
+xvalid_comparison <- data.frame(
+  Model = c("Exponential", "Spherical", "Gaussian"),
+  CrossValidationCoefficient = c(cv_coefficient_exp, cv_coefficient_sph, cv_coefficient_gau)
+)
+
+# Display the results
+print(xvalid_comparison)
+
+```
+
+
 
 ```{r}
 mse_exp <- mse_sph <- mse_gau <- numeric(nrow(wolfcamp$coords))
