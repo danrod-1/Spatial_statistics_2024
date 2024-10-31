@@ -96,8 +96,11 @@ lines(vv.sph, col = "blue")
 vv.matern <- likfit(geodata = wolfcamp, trend = "1st", cov.model = "matern", ini.cov.pars = c(2000,100), kappa = 1.2)
 lines(vv.matern, col = "green")
 
-legend("topleft", legend = c("Exponential", "Spherical", "Matern"), 
-       col = c("red", "blue", "green"), lty = 1, bty = "n")
+vv.matern_2 <- likfit(geodata = wolfcamp, trend = "1st", cov.model = "matern", ini.cov.pars = c(2000,100), kappa = 0.2)
+lines(vv.matern_2, col = "orange")
+
+legend("bottomright", legend = c("Exponential", "Spherical", "Matern (1.2)", "Matern (0.2)"), 
+       col = c("red", "blue", "green", "orange"), lty = 1, bty = "n")
 ```
 ```{r warning=FALSE}
 # Spherical
@@ -108,16 +111,24 @@ summary(vv.sph)
 vv.exp
 summary(vv.exp)
 
-# Gaussian
+# Matern (1.2)
 vv.matern
 summary(vv.matern)
+
+# Matern (0.2)
+vv.matern_2
+summary(vv.matern_2)
+
 ```
 
 
 ```{r warning=FALSE}
+
 summary_exp <- summary(vv.exp)
 summary_sph <- summary(vv.sph)
 summary_matern <- summary(vv.matern)
+summary_matern_2 <- summary(vv.matern_2)
+
 
 loglik_exp <- summary_exp$likelihood$log.L
 aic_exp <- summary_exp$likelihood$AIC
@@ -131,37 +142,48 @@ loglik_matern <- summary_matern$likelihood$log.L
 aic_matern <- summary_matern$likelihood$AIC
 bic_matern <- summary_matern$likelihood$BIC
 
+loglik_matern_2 <- summary_matern_2$likelihood$log.L
+aic_matern_2 <- summary_matern_2$likelihood$AIC
+bic_matern_2 <- summary_matern_2$likelihood$BIC
+
+
 model_comparison <- data.frame(
-  Model = c("Exponential", "Spherical", "Matern"),
-  LogLikelihood = c(loglik_exp, loglik_sph, loglik_matern),
-  AIC = c(aic_exp, aic_sph, aic_matern),
-  BIC = c(bic_exp, bic_sph, bic_matern)
+  Model = c("Exponential", "Spherical", "Matern (1.2)", "Matern (0.2)"),
+  LogLikelihood = c(loglik_exp, loglik_sph, loglik_matern, loglik_matern_2),
+  AIC = c(aic_exp, aic_sph, aic_matern, aic_matern_2),
+  BIC = c(bic_exp, bic_sph, bic_matern, bic_matern_2)
 )
 
 print(model_comparison)
+
 ```
 
 We want to maximize LogLikelihood, minimize AIC and BIC. It looks like the spherical model is the best fit here. However, the difference is very marginal.
 
 ```{r warning=FALSE}
+
 xvalid_exp <- xvalid(wolfcamp, model = vv.exp)
 xvalid_sph <- xvalid(wolfcamp, model = vv.sph)
 xvalid_matern <- xvalid(wolfcamp, model = vv.matern)
+xvalid_matern_2 <- xvalid(wolfcamp, model = vv.matern_2)
 
 cv_coefficient_exp <- mean(xvalid_exp$std.error^2)
 cv_coefficient_sph <- mean(xvalid_sph$std.error^2)
 cv_coefficient_matern <- mean(xvalid_matern$std.error^2)
+cv_coefficient_matern_2 <- mean(xvalid_matern_2$std.error^2)
 
 xvalid_comparison <- data.frame(
-  Model = c("Exponential", "Spherical", "Matern"),
-  CrossValidationCoefficient = c(cv_coefficient_exp, cv_coefficient_sph, cv_coefficient_matern)
+  Model = c("Exponential", "Spherical", "Matern (1.2)", "Matern (0.2)"),
+  CrossValidationCoefficient = c(cv_coefficient_exp, cv_coefficient_sph, 
+                                 cv_coefficient_matern, cv_coefficient_matern_2)
 )
 
 print(xvalid_comparison)
 
+
 ```
 
-For CV, Matern is marginally better (we want to minimize the CV). While no model is outright wrong if we need to pick one spherical seems like the best option. Yes, Matern has a better CV however the difference is so small that it may be reasonable to prioritize increased performance as measured by loglike, AIC, BIC (also small but a bit larger) 
+For CV, Matern is marginally better (we want to minimize the CV). While no model is outright wrong if we need to pick one, Matern seems like the best option. It has the best CV and that's what we decided to prioritize because it indicates a better predictive ability
 
 # Question 2
 
@@ -175,9 +197,13 @@ grid <- expand.grid(
 
 kriging_result_sph <- krige.conv(wolfcamp, 
                              locations = grid, 
-                             krige = krige.control(obj.model = vv.sph))
-image(kriging_result_sph, main = "Kriging Interpolation (Spherical Model)")
+                             krige = krige.control(obj.model = vv.matern_2))
+image(kriging_result_sph, main = "Kriging Interpolation (Matern with kappa 0.2)")
 points(wolfcamp$coords, col = "red", pch = 16)
+
+
+
+
 ```
 
 
@@ -207,7 +233,7 @@ custom_palette <- c("lightyellow", "yellow", "orange", "red", "darkred")
 ggplot(kriging_results, aes(x = x, y = y)) +
   geom_tile(aes(fill = prediction)) +
   scale_fill_gradientn(colors = custom_palette) +
-  labs(title = "Kriging Predictions (Spherical Model with 1st-order Trend)",
+  labs(title = "Kriging Predictions (Matern Model with 1st-order Trend)",
        fill = "Prediction") +
   theme_minimal()
 
