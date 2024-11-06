@@ -157,21 +157,23 @@ plot(vv,type="b")
 
 
 ```{r}
+# Recréer l'objet variogram avec la tendance et vérifier la distance maximale
 vv <- variog(shrimps_geor97, trend = ~ bat + temp.maxq1 + temp.minq4p + temp.maxq3p + salinity.maxq3p + salinity.maxq3, max.dist = 60, lambda = 0)
 plot(vv, type = "b")
 
 # Ajustement du modèle exponentiel
 vv.exp <- likfit(shrimps_geor97, trend = ~ bat + temp.maxq1 + temp.minq4p + temp.maxq3p + salinity.maxq3p + salinity.maxq3, 
-                 cov.model = "exponential", ini.cov.pars = c(2000, 100))
-lines(vv.exp, col = "red")
+                 cov.model = "exponential", ini.cov.pars = c(2000, 60), lambda = 0, nugget = 1)
+lines.variomodel(vv.exp, col = "red")
 
 # Ajustement du modèle sphérique
 vv.sph <- likfit(shrimps_geor97, trend = ~ bat + temp.maxq1 + temp.minq4p + temp.maxq3p + salinity.maxq3p + salinity.maxq3, 
-                 cov.model = "spherical", ini.cov.pars = c(2000, 100))
-lines(vv.sph, col = "blue")
+                 cov.model = "spherical", ini.cov.pars = c(2000, 60), lambda = 0, nugget = 1)
+lines.variomodel(vv.sph, col = "blue")
 
-# Ajout de la légende
-legend("topleft", legend = c("Exponential", "Spherical"), col = c("red", "blue"), lty = 1, bty = "n")
+# Ajouter une légende au graphique
+legend("bottomright", legend = c("Exponential", "Spherical"), 
+       col = c("red", "blue"), lty = 1, bty = "n")
 ```
 
 ```{r}
