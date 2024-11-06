@@ -1,0 +1,221 @@
+---
+title: "Homework 2"
+output: html_document
+author: "Daniil Rodionov, Hugo Aubert"
+date: "2024-10-25"
+---
+
+```{r}
+rm(list = ls())
+```
+
+
+List of the useful packages
+
+```{r message=FALSE, warning=FALSE, include=FALSE}
+suppressWarnings(suppressPackageStartupMessages(require(MASS)))
+suppressWarnings(suppressPackageStartupMessages(require(MBA)))
+suppressWarnings(suppressPackageStartupMessages(require(gstat)))
+suppressWarnings(suppressPackageStartupMessages(require(sf)))
+suppressWarnings(suppressPackageStartupMessages(require(geoR)))
+suppressWarnings(suppressPackageStartupMessages(require(ggplot2)))
+suppressWarnings(suppressPackageStartupMessages(require(corrplot)))
+suppressWarnings(suppressPackageStartupMessages(require(dplyr)))
+suppressWarnings(suppressPackageStartupMessages(require(sp)))
+suppressWarnings(suppressPackageStartupMessages(require(RColorBrewer)))
+suppressWarnings(suppressPackageStartupMessages(require(reshape2)))
+suppressWarnings(suppressPackageStartupMessages(require(FactoMineR)))
+suppressWarnings(suppressPackageStartupMessages(require(factoextra)))
+```
+
+Question 1
+
+```{r}
+shrimpsdata97 <- shrimpsdata %>%
+  filter(ANNO == 1997)
+
+shrimpsdata06 <- shrimpsdata %>%
+  filter(ANNO == 2006)
+
+shrimpsdata9706 <- shrimpsdata %>%
+  filter(ANNO == c(1997,2006))
+
+shrimpsdataframe06 <- data.frame(X = shrimpsdata06$X, Y =shrimpsdata06$Y, tot = (shrimpsdata06$tot + 1), bat = shrimpsdata06$bat, tempmax3p = shrimpsdata06$temp.maxq3p, temp.maxq1 = shrimpsdata06$temp.maxq1, temp.minq4p = shrimpsdata06$temp.minq4p, temp.maxq3p = shrimpsdata06$temp.maxq3p, salinity.maxq3p = shrimpsdata06$salinity.maxq3p, salinity.maxq3 = shrimpsdata06$salinity.maxq3)
+
+shrimpsdataframe97 <- data.frame(X = shrimpsdata97$X, Y =shrimpsdata97$Y, tot = (shrimpsdata97$tot + 1), bat = shrimpsdata97$bat, tempmax3p = shrimpsdata97$temp.maxq3p, temp.maxq1 = shrimpsdata97$temp.maxq1 , temp.minq4p = shrimpsdata97$temp.minq4p , temp.maxq3p = shrimpsdata97$temp.maxq3p , salinity.maxq3p = shrimpsdata97$salinity.maxq3p , salinity.maxq3 = shrimpsdata97$salinity.maxq3)
+
+summary(shrimpsdata97)
+summary(shrimpsdata06)
+```
+
+
+```{r}
+# Transformer en objet geodata, en spécifiant la colonne des données et les covariables
+shrimps_geor97 <- as.geodata(shrimpsdataframe97, coords.col = 1:2, data.col = which(names(shrimpsdataframe97) == "tot"))
+
+shrimps_geor06 <- as.geodata(shrimpsdataframe06, coords.col = 1:2, data.col = which(names(shrimpsdataframe06) == "tot"))
+
+```
+
+
+```{r}
+shrimpsdata97_acp <- shrimpsdata97[, sapply(shrimpsdata97, is.numeric)]
+shrimpsdata97_acp <- shrimpsdata97_acp[ , !names(shrimpsdata97_acp) %in% c("ANNO")]
+
+# Réaliser l'ACP
+acp_result <- PCA(shrimpsdata97_acp, graph = FALSE)
+
+# Visualiser les variables avec la flèche de la variable "tot" mise en évidence
+fviz_pca_var(acp_result, 
+             col.var = ifelse(rownames(acp_result$var$coord) == "tot", "red", "grey"), # Colorer "tot" en rouge
+             repel = TRUE, 
+             title = "Variables avec mise en évidence de la variable tot")
+
+# Afficher la contribution des variables pour le premier axe
+fviz_contrib(acp_result, choice = "var", axes = 1, top = 10, title = "Contribution des variables pour l'axe 1")
+
+# Afficher la contribution des variables pour le deuxième axe
+fviz_contrib(acp_result, choice = "var", axes = 2, top = 10, title = "Contribution des variables pour l'axe 2")
+
+
+shrimpsdata06_acp <- shrimpsdata06[, sapply(shrimpsdata06, is.numeric)]
+shrimpsdata06_acp <- shrimpsdata06_acp[ , !names(shrimpsdata06_acp) %in% c("ANNO")]
+
+# Réaliser l'ACP
+acp_result <- PCA(shrimpsdata06_acp, graph = FALSE)
+
+# Visualiser les variables avec la flèche de la variable "tot" mise en évidence
+fviz_pca_var(acp_result, 
+             col.var = ifelse(rownames(acp_result$var$coord) == "tot", "red", "grey"), # Colorer "tot" en rouge
+             repel = TRUE, 
+             title = "Variables avec mise en évidence de la variable tot")
+
+# Afficher la contribution des variables pour le premier axe
+fviz_contrib(acp_result, choice = "var", axes = 1, top = 10, title = "Contribution des variables pour l'axe 1")
+
+# Afficher la contribution des variables pour le deuxième axe
+fviz_contrib(acp_result, choice = "var", axes = 2, top = 10, title = "Contribution des variables pour l'axe 2")
+```
+
+```{r}
+
+correlation_matrix97 <- cor(shrimpsdata97)
+correlation_matrix_melted97 <- melt(correlation_matrix97)
+correlation_matrix_tot97 <- correlation_matrix_melted97 %>%
+  filter(Var1 == "tot" & Var2 != "ANNO")
+
+# Créer une heatmap pour la ligne de la variable "tot"
+ggplot(data = correlation_matrix_tot97, aes(x = Var2, y = Var1, fill = value)) +
+  geom_tile(color = "white") +
+  geom_text(aes(label = round(value, 2)), color = "black", size = 2) +  # Afficher les coefficients arrondis
+  scale_fill_gradient2(low = "blue", high = "red", mid = "white", midpoint = 0, limit = c(-1, 1), space = "Lab", 
+                       name = "Corrélation") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1)) +
+  labs(title = "Corrélations avec la variable tot dans shrimpsdata9706", x = "", y = "") +
+  coord_fixed()
+
+correlation_matrix06 <- cor(shrimpsdata06)
+correlation_matrix_melted06 <- melt(correlation_matrix06)
+correlation_matrix_tot06 <- correlation_matrix_melted06 %>%
+  filter(Var1 == "tot" & Var2 != "ANNO")
+
+# Créer une heatmap pour la ligne de la variable "tot"
+ggplot(data = correlation_matrix_tot06, aes(x = Var2, y = Var1, fill = value)) +
+  geom_tile(color = "white") +
+  geom_text(aes(label = round(value, 2)), color = "black", size = 2) +  # Afficher les coefficients arrondis
+  scale_fill_gradient2(low = "blue", high = "red", mid = "white", midpoint = 0, limit = c(-1, 1), space = "Lab", 
+                       name = "Corrélation") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1)) +
+  labs(title = "Corrélations avec la variable tot dans shrimpsdata9706", x = "", y = "") +
+  coord_fixed()
+```
+
+
+```{r}
+coords97 <- shrimpsdataframe97 %>% select(X, Y)
+shrimps_geor97 <- as.geodata(shrimpsdataframe97, 
+                             coords.col = 1:2, 
+                             data.col = which(names(shrimpsdataframe97) == "tot"), 
+                             covar.col = which(names(shrimpsdataframe97) %in% c("bat", "tempmax3p", "temp.maxq1", "temp.minq4p", "temp.maxq3p", "salinity.maxq3p", "salinity.maxq3")))
+
+vv <- variog(shrimps_geor97)
+summary(vv)
+plot(vv,type="b")
+
+coords06 <- shrimpsdataframe06 %>% select(X, Y)
+shrimps_geor06 <- as.geodata(shrimpsdataframe06, 
+                             coords.col = 1:2, 
+                             data.col = which(names(shrimpsdataframe06) == "tot"), 
+                             covar.col = which(names(shrimpsdataframe06) %in% c("bat", "tempmax3p", "temp.maxq1", "temp.minq4p", "temp.maxq3p", "salinity.maxq3p", "salinity.maxq3")))
+
+vv <- variog(shrimps_geor06)
+summary(vv)
+plot(vv,type="b")
+```
+
+
+```{r}
+vv <- variog(shrimps_geor97, trend = ~ bat + temp.maxq1 + temp.minq4p + temp.maxq3p + salinity.maxq3p + salinity.maxq3, max.dist = 60, lambda = 0)
+plot(vv, type = "b")
+
+# Ajustement du modèle exponentiel
+vv.exp <- likfit(shrimps_geor97, trend = ~ bat + temp.maxq1 + temp.minq4p + temp.maxq3p + salinity.maxq3p + salinity.maxq3, 
+                 cov.model = "exponential", ini.cov.pars = c(2000, 100))
+lines(vv.exp, col = "red")
+
+# Ajustement du modèle sphérique
+vv.sph <- likfit(shrimps_geor97, trend = ~ bat + temp.maxq1 + temp.minq4p + temp.maxq3p + salinity.maxq3p + salinity.maxq3, 
+                 cov.model = "spherical", ini.cov.pars = c(2000, 100))
+lines(vv.sph, col = "blue")
+
+# Ajout de la légende
+legend("topleft", legend = c("Exponential", "Spherical"), col = c("red", "blue"), lty = 1, bty = "n")
+```
+
+```{r}
+# Étape 1 : Conversion des données en format spatial
+coordinates(shrimpsdata9706) <- ~ X + Y  # Remplacez X et Y par les noms des colonnes de coordonnées
+```
+
+```{r}
+# Choisir le modèle de Variogramme en utilisant les covariables de tendance
+vv <- variog(shrimpsdata97_geoR, trend = ~ Spawners + Recruits + salinity.maxq3p + temp.maxq3p)
+plot(vv, type = "b", main = "Variogramme avec Trend par Spawners, Recruits, salinity.maxq3p, temp.maxq3p")
+
+# Ajustement d'un modèle exponentiel
+vv.exp <- likfit(shrimpsdata97_geoR, 
+                 trend = ~ Spawners + Recruits + salinity.maxq3p + temp.maxq3p, 
+                 cov.model = "exponential", 
+                 ini.cov.pars = c(2000, 100))
+lines(vv, cov.model = "exponential", col = "red")
+
+# Ajustement d'un modèle sphérique
+vv.sph <- likfit(shrimpsdata97_geoR, 
+                 trend = ~ Spawners + Recruits + salinity.maxq3p + temp.maxq3p, 
+                 cov.model = "spherical", 
+                 ini.cov.pars = c(2000, 100))
+lines(vv, cov.model = "spherical", col = "blue")
+
+# Ajouter une légende pour les modèles de variogramme
+legend("topleft", legend = c("Exponential", "Spherical"), 
+       col = c("red", "blue"), lty = 1, bty = "n")
+```
+```{r}
+# Ajustement d'un modèle exponentiel avec une tendance de premier ordre
+fit_variogram <- likfit(shrimpsdata97_geoR, 
+                        trend = ~ Spawners + Recruits + salinity.minq3p + bat + dist + slope + temp.minq3p,
+                        ini.cov.pars = c(1, 0.5), cov.model = "exponential",
+                        nugget = 0.2, fix.nugget = 50)
+
+# Afficher les résultats de l'ajustement du variogramme
+summary(fit_variogram)
+```
+```{r}
+vv <- variog(shrimpsdata9706_geoR,trend = "1st", lambda = 0.2)
+plot(vv,type="b")
+
+lines(fit_variogram, col = "red")
+```
+
