@@ -171,14 +171,38 @@ vv.sph <- likfit(shrimps_geor97, trend = ~ bat + temp.maxq1 + temp.minq4p + temp
                  cov.model = "spherical", ini.cov.pars = c(2000, 60), lambda = 0, nugget = 1)
 lines.variomodel(vv.sph, col = "blue")
 
+# Ajustement du modèle Gaussian
+vv.gau <- likfit(shrimps_geor97, trend = ~ bat + temp.maxq1 + temp.minq4p + temp.maxq3p + salinity.maxq3p + salinity.maxq3, 
+                 cov.model = "gaussian", ini.cov.pars = c(2000, 60), lambda = 0, nugget = 1)
+lines.variomodel(vv.gau, col = "green")
+
 # Ajouter une légende au graphique
 legend("bottomright", legend = c("Exponential", "Spherical"), 
        col = c("red", "blue"), lty = 1, bty = "n")
 ```
 
 ```{r}
-# Étape 1 : Conversion des données en format spatial
-coordinates(shrimpsdata9706) <- ~ X + Y  # Remplacez X et Y par les noms des colonnes de coordonnées
+# Recréer l'objet variogram avec la tendance et vérifier la distance maximale
+vv <- variog(shrimps_geor06, trend = "1st", max.dist = 130, lambda = 0)
+plot(vv, type = "b")
+
+# Ajustement du modèle exponentiel
+vv.exp <- likfit(shrimps_geor06, trend = "1st", 
+                 cov.model = "exponential", ini.cov.pars = c(2000, 60), lambda = 0, nugget = 1)
+lines.variomodel(vv.exp, col = "red")
+
+# Ajustement du modèle sphérique
+vv.sph <- likfit(shrimps_geor06, trend = "1st", 
+                 cov.model = "spherical", ini.cov.pars = c(2000, 60), lambda = 0, nugget = 1)
+lines.variomodel(vv.sph, col = "blue")
+
+vv.gau <- likfit(shrimps_geor06, trend = "1st", 
+                 cov.model = "gaussian", ini.cov.pars = c(2000, 60), lambda = 0, nugget = 1)
+lines.variomodel(vv.gau, col = "green")
+
+# Ajouter une légende au graphique
+legend("bottomright", legend = c("Exponential", "Spherical","Gaussian"), 
+       col = c("red", "blue","green"), lty = 1, bty = "n")
 ```
 
 ```{r}
