@@ -1,0 +1,247 @@
+---
+title: "Homework 3"
+output: html_document
+author: "Daniil Rodionov, Hugo Aubert"
+date: "2024-10-25"
+---
+
+```{r}
+rm(list = ls())
+options(warn = -1)
+```
+
+List of the useful packages
+
+```{r message=FALSE, warning=FALSE, include=FALSE}
+suppressWarnings(suppressPackageStartupMessages(require(MASS)))
+suppressWarnings(suppressPackageStartupMessages(require(MBA)))
+suppressWarnings(suppressPackageStartupMessages(require(gstat)))
+suppressWarnings(suppressPackageStartupMessages(require(sf)))
+suppressWarnings(suppressPackageStartupMessages(require(geoR)))
+suppressWarnings(suppressPackageStartupMessages(require(ggplot2)))
+suppressWarnings(suppressPackageStartupMessages(require(corrplot)))
+suppressWarnings(suppressPackageStartupMessages(require(dplyr)))
+suppressWarnings(suppressPackageStartupMessages(require(sp)))
+suppressWarnings(suppressPackageStartupMessages(require(RColorBrewer)))
+```
+
+```{r}
+data("wolfcamp")
+plot(wolfcamp)
+summary(wolfcamp)
+```
+# Question 1
+
+```{r warning=FALSE}
+directions_deg <- c(0, 45, 90, 135)
+
+#we need radians for variog
+directions_rad <- directions_deg * (pi / 180)
+
+variograms <- list()
+
+for (dir in directions_rad) {
+  variograms[[paste("Direction", dir * (180 / pi))]] <- variog(wolfcamp, direction = dir)
+}
+
+plot(variograms[[1]], type = "b", main = "Directional Variograms", col = "red",
+     ylim = c(0, max(sapply(variograms, function(x) max(x$v)))))
+for (i in 2:length(directions_rad)) {
+  lines(variograms[[i]], type = "b", col = i)
+}
+
+legend("topleft", legend = paste("Direction", directions_deg, "degrees"), col = 1:length(directions_rad), lty = 1, bty = "n", adj = c(0, 0.5))
+
+
+
+```
+
+We can observe that the Variogram shows a linear relation between the Semi-Variance and the Distance until a distance = 250 and then goes up instead of reaching maximum (or approaching it). Also, variograms are different in different directions. Therefore, we need to use trend = 1st. 
+
+```{r message=FALSE, warning=FALSE}
+variogram_result <- variog(wolfcamp, trend = "1st")
+
+plot(variogram_result$u, variogram_result$n, type = "b",
+     main = "Number of Pairwise Comparisons per Bin",
+     xlab = "distance", ylab = "count",
+     col = "blue", pch = 16, lty = 1)
+
+grid()
+
+```
+
+
+
+
+
+```{r warning=FALSE}
+vv <- variog(wolfcamp,trend = "1st", max.dist = 250)
+plot(vv,type="b")
+```
+
+Sadly, eyefit only works for .R not .Rmd files. Hence, its commented out here
+```{r warning=FALSE}
+#eyefit(vv) 
+```
+
+
+```{r warning=FALSE}
+plot(vv,type="b")
+
+vv.exp <- likfit(wolfcamp,trend = "1st", cov.model = "exponential",ini.cov.pars = c(2000,100))
+lines(vv.exp, col = "red")
+
+vv.sph <- likfit(wolfcamp, trend = "1st", cov.model = "spherical", ini.cov.pars = c(2000,100))
+lines(vv.sph, col = "blue")
+
+vv.matern <- likfit(geodata = wolfcamp, trend = "1st", cov.model = "matern", ini.cov.pars = c(2000,100), kappa = 1.2)
+lines(vv.matern, col = "green")
+
+legend("topleft", legend = c("Exponential", "Spherical", "Matern"), 
+       col = c("red", "blue", "green"), lty = 1, bty = "n")
+```
+```{r warning=FALSE}
+# Spherical
+vv.sph
+summary(vv.sph)
+
+# Exponential
+vv.exp
+summary(vv.exp)
+
+# Gaussian
+vv.matern
+summary(vv.matern)
+```
+
+
+```{r warning=FALSE}
+summary_exp <- summary(vv.exp)
+summary_sph <- summary(vv.sph)
+summary_matern <- summary(vv.matern)
+
+loglik_exp <- summary_exp$likelihood$log.L
+aic_exp <- summary_exp$likelihood$AIC
+bic_exp <- summary_exp$likelihood$BIC
+
+loglik_sph <- summary_sph$likelihood$log.L
+aic_sph <- summary_sph$likelihood$AIC
+bic_sph <- summary_sph$likelihood$BIC
+
+loglik_matern <- summary_matern$likelihood$log.L
+aic_matern <- summary_matern$likelihood$AIC
+bic_matern <- summary_matern$likelihood$BIC
+
+model_comparison <- data.frame(
+  Model = c("Exponential", "Spherical", "Matern"),
+  LogLikelihood = c(loglik_exp, loglik_sph, loglik_matern),
+  AIC = c(aic_exp, aic_sph, aic_matern),
+  BIC = c(bic_exp, bic_sph, bic_matern)
+)
+
+print(model_comparison)
+```
+
+We want to maximize LogLikelihood, minimize AIC and BIC. It looks like the speherical model is the best fit here. However, the difference is very marginal.
+
+```{r warning=FALSE}
+xvalid_exp <- xvalid(wolfcamp, model = vv.exp)
+xvalid_sph <- xvalid(wolfcamp, model = vv.sph)
+xvalid_matern <- xvalid(wolfcamp, model = vv.matern)
+
+cv_coefficient_exp <- mean(xvalid_exp$std.error^2)
+cv_coefficient_sph <- mean(xvalid_sph$std.error^2)
+cv_coefficient_matern <- mean(xvalid_matern$std.error^2)
+
+xvalid_comparison <- data.frame(
+  Model = c("Exponential", "Spherical", "Matern"),
+  CrossValidationCoefficient = c(cv_coefficient_exp, cv_coefficient_sph, cv_coefficient_matern)
+)
+
+print(xvalid_comparison)
+
+```
+
+For CV, Spherical is marginally better. 
+
+# Question 2
+
+
+```{r warning=FALSE}
+
+grid <- expand.grid(
+  x = seq(min(wolfcamp$coords[,1]), max(wolfcamp$coords[,1])),
+  y = seq(min(wolfcamp$coords[,2]), max(wolfcamp$coords[,2]))
+)
+
+kriging_result_sph <- krige.conv(wolfcamp, 
+                             locations = grid, 
+                             krige = krige.control(obj.model = vv.sph))
+image(kriging_result_sph, main = "Kriging Interpolation (Spherical Model)")
+points(wolfcamp$coords, col = "red", pch = 16)
+
+kriging_result_matern <- krige.conv(wolfcamp, 
+                             locations = grid, 
+                             krige = krige.control(obj.model = vv.matern))
+image(kriging_result_matern, main = "Kriging Interpolation (Matern Model)")
+points(wolfcamp$coords, col = "red", pch = 16)
+
+kriging_result_exp <- krige.conv(wolfcamp, 
+                             locations = grid, 
+                             krige = krige.control(obj.model = vv.exp))
+image(kriging_result_exp, main = "Kriging Interpolation (Exponential Model)")
+points(wolfcamp$coords, col = "red", pch = 16)
+
+```
+
+
+
+```{r warning=FALSE}
+# Extract predictions and standard errors
+predictions <- kriging_result_sph$predict
+std_errors <- sqrt(kriging_result_sph$krige.var)
+
+# Calculate 95% confidence intervals
+lower_bound <- predictions - 1.96 * std_errors
+upper_bound <- predictions + 1.96 * std_errors
+
+# Combine into a data frame for easy handling
+kriging_results <- data.frame(
+  x = grid$x,
+  y = grid$y,
+  prediction = predictions,
+  lower_ci = lower_bound,
+  upper_ci = upper_bound
+)
+
+```
+
+
+```{r warning=FALSE}
+
+custom_palette <- c("lightyellow", "yellow", "orange", "red", "darkred")
+
+ggplot(kriging_results, aes(x = x, y = y)) +
+  geom_tile(aes(fill = prediction)) +
+  scale_fill_gradientn(colors = custom_palette) +
+  labs(title = "Kriging Predictions (Spherical Model with 1st-order Trend)",
+       fill = "Prediction") +
+  theme_minimal()
+
+ggplot(kriging_results, aes(x = x, y = y)) +
+  geom_tile(aes(fill = lower_ci)) +
+  scale_fill_gradientn(colors = custom_palette) +
+  labs(title = "Lower 95% Confidence Interval",
+       fill = "Lower CI") +
+  theme_minimal()
+
+ggplot(kriging_results, aes(x = x, y = y)) +
+  geom_tile(aes(fill = upper_ci)) +
+  scale_fill_gradientn(colors = custom_palette) +
+  labs(title = "Upper 95% Confidence Interval",
+       fill = "Upper CI") +
+  theme_minimal()
+
+
+```
+
