@@ -1,0 +1,283 @@
+---
+title: "HW4_f"
+output: html_document
+author: "Daniil Rodionov, Hugo Aubert"
+date: "2024-11-09"
+---
+
+```{r}
+rm(list = ls())
+```
+
+List of the useful packages
+
+```{r message=FALSE, warning=FALSE, include=FALSE}
+suppressWarnings(suppressPackageStartupMessages(require(MASS)))
+suppressWarnings(suppressPackageStartupMessages(require(MBA)))
+suppressWarnings(suppressPackageStartupMessages(require(gstat)))
+suppressWarnings(suppressPackageStartupMessages(require(sf)))
+suppressWarnings(suppressPackageStartupMessages(require(geoR)))
+suppressWarnings(suppressPackageStartupMessages(require(ggplot2)))
+suppressWarnings(suppressPackageStartupMessages(require(corrplot)))
+suppressWarnings(suppressPackageStartupMessages(require(dplyr)))
+suppressWarnings(suppressPackageStartupMessages(require(sp)))
+suppressWarnings(suppressPackageStartupMessages(require(RColorBrewer)))
+suppressWarnings(suppressPackageStartupMessages(require(reshape2)))
+suppressWarnings(suppressPackageStartupMessages(require(FactoMineR)))
+suppressWarnings(suppressPackageStartupMessages(require(factoextra)))
+```
+
+Year 1997 & 2006
+
+```{r}
+shrimpsdata97 <- shrimpsdata %>%
+  filter(ANNO == 1997)
+
+shrimpsdata06 <- shrimpsdata %>%
+  filter(ANNO == 2006)
+
+shrimpsdataframe06 <- data.frame(X = shrimpsdata06$X, Y =shrimpsdata06$Y, tot = (shrimpsdata06$tot + 1), bat = shrimpsdata06$bat, tempmax3p = shrimpsdata06$temp.maxq3p, temp.maxq1 = shrimpsdata06$temp.maxq1, temp.minq4p = shrimpsdata06$temp.minq4p, temp.maxq3p = shrimpsdata06$temp.maxq3p, salinity.maxq3p = shrimpsdata06$salinity.maxq3p, salinity.maxq3 = shrimpsdata06$salinity.maxq3)
+
+shrimpsdataframe97 <- data.frame(X = shrimpsdata97$X, Y =shrimpsdata97$Y, tot = (shrimpsdata97$tot + 1), bat = shrimpsdata97$bat, tempmax3p = shrimpsdata97$temp.maxq3p, temp.maxq1 = shrimpsdata97$temp.maxq1 , temp.minq4p = shrimpsdata97$temp.minq4p , temp.maxq3p = shrimpsdata97$temp.maxq3p , salinity.maxq3p = shrimpsdata97$salinity.maxq3p , salinity.maxq3 = shrimpsdata97$salinity.maxq3)
+```
+
+For Year 1997 : 
+
+```{r}
+shrimpsdata97_acp <- shrimpsdata97[, sapply(shrimpsdata97, is.numeric)]
+shrimpsdata97_acp <- shrimpsdata97_acp[ , !names(shrimpsdata97_acp) %in% c("ANNO")]
+
+# Réaliser l'ACP
+acp_result <- PCA(shrimpsdata97_acp, graph = FALSE)
+
+# Visualiser les variables avec la flèche de la variable "tot" mise en évidence
+fviz_pca_var(acp_result, 
+             col.var = ifelse(rownames(acp_result$var$coord) == "tot", "grey", "red"),
+             repel = TRUE, 
+             title = "Variables avec mise en évidence de la variable tot")
+
+# Afficher la contribution des variables pour le premier axe
+fviz_contrib(acp_result, choice = "var", axes = 1, top = 10, title = "Contribution des variables pour l'axe 1")
+
+# Afficher la contribution des variables pour le deuxième axe
+fviz_contrib(acp_result, choice = "var", axes = 2, top = 10, title = "Contribution des variables pour l'axe 2")
+```
+
+```{r}
+correlation_matrix97 <- cor(shrimpsdata97)
+correlation_matrix_melted97 <- melt(correlation_matrix97)
+correlation_matrix_tot97 <- correlation_matrix_melted97 %>%
+  filter(Var1 == "tot" & Var2 != "ANNO")
+
+# Créer une heatmap pour la ligne de la variable "tot"
+ggplot(data = correlation_matrix_tot97, aes(x = Var2, y = Var1, fill = value)) +
+  geom_tile(color = "white") +
+  geom_text(aes(label = round(value, 2)), color = "black", size = 2) +  # Afficher les coefficients arrondis
+  scale_fill_gradient2(low = "blue", high = "red", mid = "white", midpoint = 0, limit = c(-1, 1), space = "Lab", 
+                       name = "Corrélation") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1)) +
+  labs(title = "Corrélations avec la variable tot dans shrimpsdata97", x = "", y = "") +
+  coord_fixed()
+```
+```{r}
+coords97 <- shrimpsdataframe97 %>% select(X, Y)
+shrimps_geor97 <- as.geodata(shrimpsdataframe97, 
+                             coords.col = 1:2, 
+                             data.col = which(names(shrimpsdataframe97) == "tot"), 
+                             covar.col = which(names(shrimpsdataframe97) %in% c("bat", "tempmax3p", "temp.maxq1", "temp.minq4p", "temp.maxq3p", "salinity.maxq3p", "salinity.maxq3")))
+
+vv <- variog(shrimps_geor97)
+summary(vv)
+plot(vv,type="b")
+```
+
+```{r}
+# Recréer l'objet variogram avec la tendance et vérifier la distance maximale
+vv1 <- variog(shrimps_geor97, trend = "1st", max.dist = 60, lambda = 0)
+vv2 <- variog(shrimps_geor97, trend = ~ bat + temp.maxq1 + temp.minq4p + temp.maxq3p + salinity.maxq3p + salinity.maxq3, max.dist = 60, lambda = 0)
+vv3 <- variog(shrimps_geor97, trend = ~ temp.maxq1 + temp.minq4p + temp.maxq3p + salinity.maxq3p + salinity.maxq3, max.dist = 60, lambda = 0)
+vv4 <- variog(shrimps_geor97, trend = ~ salinity.maxq3p + salinity.maxq3, max.dist = 60, lambda = 0)
+
+# Créer un seul graphique pour comparer les variogrammes
+plot(vv1, type = "b", col = "blue", xlab = "Distance", ylab = "Semivariance", main = "Comparison of Variograms with Different Trends")
+lines(vv2$u, vv2$v, type = "b", col = "red", pch = 2)
+lines(vv3$u, vv3$v, type = "b", col = "green", pch = 3)
+lines(vv4$u, vv4$v, type = "b", col = "purple", pch = 4)
+
+# Ajouter une légende
+legend("bottomright", legend = c("Trend: 1st order", "Trend: bat + temp + salinity", "Trend: temp + salinity", "Trend: salinity only"),
+       col = c("blue", "red", "green", "purple"), pch = c(1, 2, 3, 4))
+```
+
+
+```{r}
+# Recréer l'objet variogram avec la tendance et vérifier la distance maximale
+vv <- variog(shrimps_geor97, trend = ~ bat + temp.maxq1 + temp.minq4p + temp.maxq3p + salinity.maxq3p + salinity.maxq3, max.dist = 60, lambda = 0)
+plot(vv, type = "b")
+
+# Ajustement du modèle exponentiel
+vv.exp <- likfit(shrimps_geor97, trend = ~ bat + temp.maxq1 + temp.minq4p + temp.maxq3p + salinity.maxq3p + salinity.maxq3, 
+                 cov.model = "exponential", ini.cov.pars = c(2000, 60), lambda = 0, nugget = 1)
+lines.variomodel(vv.exp, col = "red")
+
+# Ajustement du modèle sphérique
+vv.sph <- likfit(shrimps_geor97, trend = ~ bat + temp.maxq1 + temp.minq4p + temp.maxq3p + salinity.maxq3p + salinity.maxq3, 
+                 cov.model = "spherical", ini.cov.pars = c(2000, 60), lambda = 0, nugget = 1)
+lines.variomodel(vv.sph, col = "blue")
+
+# Ajustement du modèle Gaussian
+vv.gau <- likfit(shrimps_geor97, trend = ~ bat + temp.maxq1 + temp.minq4p + temp.maxq3p + salinity.maxq3p + salinity.maxq3, 
+                 cov.model = "gaussian", ini.cov.pars = c(2000, 60), lambda = 0, nugget = 1)
+lines.variomodel(vv.gau, col = "green")
+
+# Ajouter une légende au graphique
+legend("bottomright", legend = c("Exponential", "Spherical","Gaussian"), 
+       col = c("red", "blue","green"), lty = 1, bty = "n")
+```
+```{r}
+cv.exp <- xvalid(shrimps_geor97, model = vv.exp)
+cv.sph <- xvalid(shrimps_geor97, model = vv.sph)
+cv.gau <- xvalid(shrimps_geor97, model = vv.gau)
+
+error.exp <- mean(cv.exp$std.error^2)
+error.sph <- mean(cv.sph$std.error^2)
+error.gau <- mean(cv.gau$std.error^2)
+
+print(error.exp)
+print(error.sph)
+print(error.gau)
+```
+```{r}
+kriging_result_97 <- krige.conv(
+  geodata = shrimps_geor97,
+  locations = grid_1997[, c("X", "Y")],
+  krige = krige.control(obj.model = vv.exp))
+
+z_matrix_97 <- matrix(kriging_result_97$predict, nrow = length(unique(grid_1997$Y)), ncol = length(unique(grid_1997$X)))
+
+long_data <- melt(z_matrix_97)
+colnames(long_data) <- c("Y", "X", "Value")
+
+ggplot(long_data, aes(x = X, y = Y, fill = Value)) +
+  geom_tile() +
+  scale_fill_gradientn(colours = terrain.colors(10)) +
+  labs(title = "Kriging Result 1997",
+       x = "X",
+       y = "Y") +
+  theme_minimal()
+```
+```{r}
+low_97 <- kriging_result_97$predict - 1.96 * sqrt(kriging_result$krige.var)
+up_97 <- kriging_result_97$predict + 1.96 * sqrt(kriging_result$krige.var)
+
+result_table <- data.frame(
+  Predicted_Value = kriging_result_97$predict,
+  Lower_Bound = low_97,
+  Upper_Bound = up_97
+)
+
+print(result_table)
+```
+For Year 2006 :
+
+```{r}
+coords06 <- shrimpsdataframe06 %>% select(X, Y)
+shrimps_geor06 <- as.geodata(shrimpsdataframe06, 
+                             coords.col = 1:2, 
+                             data.col = which(names(shrimpsdataframe06) == "tot"), 
+                             covar.col = which(names(shrimpsdataframe06) %in% c("bat", "tempmax3p", "temp.maxq1", "temp.minq4p", "temp.maxq3p", "salinity.maxq3p", "salinity.maxq3")))
+
+vv <- variog(shrimps_geor06)
+summary(vv)
+plot(vv,type="b")
+```
+
+```{r}
+# Recréer l'objet variogram avec la tendance et vérifier la distance maximale
+vv1 <- variog(shrimps_geor06, trend = "1st", max.dist = 60, lambda = 0)
+vv2 <- variog(shrimps_geor06, trend = ~ bat + temp.maxq1 + temp.minq4p + temp.maxq3p + salinity.maxq3p + salinity.maxq3, max.dist = 60, lambda = 0)
+vv3 <- variog(shrimps_geor06, trend = ~ temp.maxq1 + temp.minq4p + temp.maxq3p + salinity.maxq3p + salinity.maxq3, max.dist = 60, lambda = 0)
+vv4 <- variog(shrimps_geor06, trend = ~ salinity.maxq3p + salinity.maxq3, max.dist = 60, lambda = 0)
+
+# Créer un seul graphique pour comparer les variogrammes
+plot(vv1, type = "b", col = "blue", xlab = "Distance", ylab = "Semivariance", main = "Comparison of Variograms with Different Trends")
+lines(vv2$u, vv2$v, type = "b", col = "red", pch = 2)
+lines(vv3$u, vv3$v, type = "b", col = "green", pch = 3)
+lines(vv4$u, vv4$v, type = "b", col = "purple", pch = 4)
+
+# Ajouter une légende
+legend("bottomright", legend = c("Trend: 1st order", "Trend: bat + temp + salinity", "Trend: temp + salinity", "Trend: salinity only"),
+       col = c("blue", "red", "green", "purple"), pch = c(1, 2, 3, 4))
+```
+
+
+```{r}
+# Recréer l'objet variogram avec la tendance et vérifier la distance maximale
+vv <- variog(shrimps_geor06, trend = ~ bat + temp.maxq3p , max.dist = 60, lambda = 0)
+plot(vv, type = "b")
+
+# Ajustement du modèle exponentiel
+vv.exp <- likfit(shrimps_geor06, trend = ~ bat + temp.maxq3p, 
+                 cov.model = "exponential", ini.cov.pars = c(2000, 60), lambda = 0, nugget = 1)
+lines.variomodel(vv.exp, col = "red")
+
+# Ajustement du modèle sphérique
+vv.sph <- likfit(shrimps_geor06, trend = ~ bat + temp.maxq3p, 
+                 cov.model = "spherical", ini.cov.pars = c(2000, 60), lambda = 0, nugget = 1)
+lines.variomodel(vv.sph, col = "blue")
+
+vv.gau <- likfit(shrimps_geor06, trend = ~ bat + temp.maxq3p, 
+                 cov.model = "gaussian", ini.cov.pars = c(2000, 60), lambda = 0, nugget = 1)
+lines.variomodel(vv.gau, col = "green")
+
+# Ajouter une légende au graphique
+legend("bottomright", legend = c("Exponential", "Spherical","Gaussian"), 
+       col = c("red", "blue","green"), lty = 1, bty = "n")
+```
+```{r}
+cv.exp <- xvalid(shrimps_geor97, model = vv.exp)
+cv.sph <- xvalid(shrimps_geor97, model = vv.sph)
+cv.gau <- xvalid(shrimps_geor97, model = vv.gau)
+
+error.exp <- mean(cv.exp$std.error^2)
+error.sph <- mean(cv.sph$std.error^2)
+error.gau <- mean(cv.gau$std.error^2)
+
+print(error.exp)
+print(error.sph)
+print(error.gau)
+```
+
+```{r}
+kriging_result_06 <- krige.conv(
+  geodata = shrimps_geor06,
+  locations = grid_2006[, c("X", "Y")],
+  krige = krige.control(obj.model = vv.exp))
+
+z_matrix_06 <- matrix(kriging_result_06$predict, nrow = length(unique(grid_2006$Y)), ncol = length(unique(grid_2006$X)))
+
+long_data <- melt(z_matrix_06)
+colnames(long_data) <- c("Y", "X", "Value")
+
+ggplot(long_data, aes(x = X, y = Y, fill = Value)) +
+  geom_tile() +
+  scale_fill_gradientn(colours = terrain.colors(10)) +
+  labs(title = "Kriging Result 1997",
+       x = "X",
+       y = "Y") +
+  theme_minimal()
+```
+```{r}
+low_06 <- kriging_result_97$predict - 1.96 * sqrt(kriging_result$krige.var)
+up_06 <- kriging_result_97$predict + 1.96 * sqrt(kriging_result$krige.var)
+
+result_table <- data.frame(
+  Predicted_Value = kriging_result_06$predict,
+  Lower_Bound = low_06,
+  Upper_Bound = up_06
+)
+
+print(result_table)
+```
+
