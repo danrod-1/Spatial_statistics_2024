@@ -171,7 +171,8 @@ ggplot(long_data, aes(x = X, y = Y, fill = Value)) +
 low_97 <- kriging_result_97$predict - 1.96 * sqrt(kriging_result$krige.var)
 up_97 <- kriging_result_97$predict + 1.96 * sqrt(kriging_result$krige.var)
 
-result_table <- data.frame(
+result_table97 <- data.frame(
+  grid_1997,
   Predicted_Value = kriging_result_97$predict,
   Lower_Bound = low_97,
   Upper_Bound = up_97
@@ -179,6 +180,19 @@ result_table <- data.frame(
 
 print(result_table)
 ```
+```{r}
+ggplot(result_table97, aes(x = X, y = Y)) +
+  # Confidence interval as shaded area
+  geom_tile(aes(fill = Predicted_Value)) +
+  geom_tile(aes(fill = Lower_Bound), alpha = 0.4) +
+  geom_tile(aes(fill = Upper_Bound), alpha = 0.4) +
+  geom_point(data = shrimps_geor97$coords, aes(x = X, y = Y), color = "red", size = 1) +
+  scale_fill_gradient(low = "lightblue", high = "darkblue") +
+  labs(title = "Predicted Values with 95% Confidence Intervals", fill = "Prediction") +
+  theme_minimal()
+```
+
+
 For Year 2006 :
 
 ```{r}
@@ -272,12 +286,24 @@ ggplot(long_data, aes(x = X, y = Y, fill = Value)) +
 low_06 <- kriging_result_97$predict - 1.96 * sqrt(kriging_result$krige.var)
 up_06 <- kriging_result_97$predict + 1.96 * sqrt(kriging_result$krige.var)
 
-result_table <- data.frame(
+result_table06 <- data.frame(
+  grid_2006,
   Predicted_Value = kriging_result_06$predict,
   Lower_Bound = low_06,
   Upper_Bound = up_06
 )
 
 print(result_table)
+```
+```{r}
+ggplot(result_table06, aes(x = X, y = Y)) +
+  # Confidence interval as shaded area
+  geom_tile(aes(fill = Predicted_Value)) +
+  geom_tile(aes(fill = Lower_Bound), alpha = 0.4) +
+  geom_tile(aes(fill = Upper_Bound), alpha = 0.4) +
+  geom_point(data = shrimps_geor97$coords, aes(x = X, y = Y), color = "red", size = 1) +
+  scale_fill_gradient(low = "lightblue", high = "darkblue") +
+  labs(title = "Predicted Values with 95% Confidence Intervals", fill = "Prediction") +
+  theme_minimal()
 ```
 
