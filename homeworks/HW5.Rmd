@@ -77,6 +77,7 @@ upper_bound <- mean_estimates + 1.96 * sqrt(variance_estimates)
 results <- data.frame(
   grid_1997,
   Estimate = mean_estimates,
+  Variance = variance_estimates,
   Lower_CI = lower_bound,
   Upper_CI = upper_bound
 )
@@ -88,6 +89,27 @@ ggplot(results, aes(x = X, y = Y)) +
   geom_point(data = shrimps_geor97$coords, aes(x = X, y = Y), color = "red", size = 1) +
   scale_fill_gradient(low = "lightblue", high = "darkblue") +
   labs(title = "Bayesian Kriging Mean Estimates with Credibility Intervals") +
+  theme_minimal()
+
+ggplot(results, aes(x = X, y = Y)) +
+  geom_tile(aes(fill = Lower_CI)) +
+  geom_point(data = shrimps_geor97$coords, aes(x = X, y = Y), color = "red", size = 1) +
+  scale_fill_gradient(low = "lightblue", high = "darkblue") +
+  labs(title = "Bayesian Kriging Lower_CI") +
+  theme_minimal()
+
+ggplot(results, aes(x = X, y = Y)) +
+  geom_tile(aes(fill = Upper_CI)) +
+  geom_point(data = shrimps_geor97$coords, aes(x = X, y = Y), color = "red", size = 1) +
+  scale_fill_gradient(low = "lightblue", high = "darkblue") +
+  labs(title = "Bayesian Kriging Upper_CI") +
+  theme_minimal()
+
+ggplot(results, aes(x = X, y = Y)) +
+  geom_tile(aes(fill = Variance)) +
+  geom_point(data = shrimps_geor97$coords, aes(x = X, y = Y), color = "red", size = 1) +
+  scale_fill_gradient(low = "lightblue", high = "darkblue") +
+  labs(title = "Bayesian Kriging Variance") +
   theme_minimal()
 ```
 
