@@ -1,5 +1,5 @@
 ---
-title: "HW4_f"
+title: "HW4"
 output: html_document
 author: "Daniil Rodionov, Hugo Aubert"
 date: "2024-11-09"
@@ -8,6 +8,8 @@ date: "2024-11-09"
 ```{r}
 rm(list = ls())
 ```
+
+# Intro
 
 List of the useful packages
 
@@ -25,6 +27,13 @@ suppressWarnings(suppressPackageStartupMessages(require(RColorBrewer)))
 suppressWarnings(suppressPackageStartupMessages(require(reshape2)))
 suppressWarnings(suppressPackageStartupMessages(require(FactoMineR)))
 suppressWarnings(suppressPackageStartupMessages(require(factoextra)))
+suppressWarnings(suppressPackageStartupMessages(require(gridExtra)))
+```
+
+
+```{r}
+load("C:/DS/Spatial_statistics/data/shrimpsfull.RData")
+load("C:/DS/Spatial_statistics/data/AllGrids.RData")
 ```
 
 Year 1997 & 2006
@@ -41,29 +50,73 @@ shrimpsdataframe06 <- data.frame(X = shrimpsdata06$X, Y =shrimpsdata06$Y, tot = 
 shrimpsdataframe97 <- data.frame(X = shrimpsdata97$X, Y =shrimpsdata97$Y, tot = (shrimpsdata97$tot + 1), bat = shrimpsdata97$bat, tempmax3p = shrimpsdata97$temp.maxq3p, temp.maxq1 = shrimpsdata97$temp.maxq1 , temp.minq4p = shrimpsdata97$temp.minq4p , temp.maxq3p = shrimpsdata97$temp.maxq3p , salinity.maxq3p = shrimpsdata97$salinity.maxq3p , salinity.maxq3 = shrimpsdata97$salinity.maxq3)
 ```
 
-For Year 1997 : 
 
-```{r}
+# Map 
+
+```{r message=FALSE, warning=FALSE}
+shrimpsdata97 <- shrimpsdata %>% filter(ANNO == 1997)
+shrimpsdata06 <- shrimpsdata %>% filter(ANNO == 2006)
+
+color_with_zero <- c("lightgrey", "yellow", "orange", "red", "darkred")
+
+map_1997_with_zero <- ggplot(shrimpsdata97, aes(x = X, y = Y)) +
+  geom_point(aes(color = tot), size = 2) +
+  scale_color_gradientn(colors = color_with_zero, limits = c(0, max(shrimpsdata97$tot)), na.value = "white") +
+  labs(title = "1997 (Zeroes Visible)", color = "Total") +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5))
+
+map_1997_no_zero <- ggplot(shrimpsdata97 %>% filter(tot > 0), aes(x = X, y = Y)) +
+  geom_point(aes(color = tot), size = 2) +
+  scale_color_gradientn(colors = color_with_zero[-1], limits = c(min(shrimpsdata97$tot[shrimpsdata97$tot > 0]), max(shrimpsdata97$tot)), na.value = "white") +
+  labs(title = "1997 (Without Zeroes)", color = "Total") +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5))
+
+map_2006_with_zero <- ggplot(shrimpsdata06, aes(x = X, y = Y)) +
+  geom_point(aes(color = tot), size = 2) +
+  scale_color_gradientn(colors = color_with_zero, limits = c(0, max(shrimpsdata06$tot)), na.value = "white") +
+  labs(title = "2006 (Zeroes Visible)", color = "Total") +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5))
+
+map_2006_no_zero <- ggplot(shrimpsdata06 %>% filter(tot > 0), aes(x = X, y = Y)) +
+  geom_point(aes(color = tot), size = 2) +
+  scale_color_gradientn(colors = color_with_zero[-1], limits = c(min(shrimpsdata06$tot[shrimpsdata06$tot > 0]), max(shrimpsdata06$tot)), na.value = "white") +
+  labs(title = "2006 (Without Zeroes)", color = "Total") +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5))
+
+grid.arrange(map_1997_with_zero, map_1997_no_zero, map_2006_with_zero, map_2006_no_zero, ncol = 2)
+```
+
+The maps above are useful to identify the maximal distance which will be used for kriging. 
+
+
+
+# Year 1997 : 
+
+## PCA
+
+```{r message=FALSE, warning=FALSE}
 shrimpsdata97_acp <- shrimpsdata97[, sapply(shrimpsdata97, is.numeric)]
 shrimpsdata97_acp <- shrimpsdata97_acp[ , !names(shrimpsdata97_acp) %in% c("ANNO")]
 
-# Réaliser l'ACP
 acp_result <- PCA(shrimpsdata97_acp, graph = FALSE)
 
-# Visualiser les variables avec la flèche de la variable "tot" mise en évidence
 fviz_pca_var(acp_result, 
              col.var = ifelse(rownames(acp_result$var$coord) == "tot", "grey", "red"),
              repel = TRUE, 
              title = "Variables avec mise en évidence de la variable tot")
 
-# Afficher la contribution des variables pour le premier axe
-fviz_contrib(acp_result, choice = "var", axes = 1, top = 10, title = "Contribution des variables pour l'axe 1")
+fviz_contrib(acp_result, choice = "var", axes = 1, top = 10, title = "Axis 1")
 
-# Afficher la contribution des variables pour le deuxième axe
-fviz_contrib(acp_result, choice = "var", axes = 2, top = 10, title = "Contribution des variables pour l'axe 2")
+fviz_contrib(acp_result, choice = "var", axes = 2, top = 10, title = "Axis 2")
 ```
 
-```{r}
+## Correlation
+
+```{r message=FALSE, warning=FALSE}
 correlation_matrix97 <- cor(shrimpsdata97)
 correlation_matrix_melted97 <- melt(correlation_matrix97)
 correlation_matrix_tot97 <- correlation_matrix_melted97 %>%
@@ -80,7 +133,9 @@ ggplot(data = correlation_matrix_tot97, aes(x = Var2, y = Var1, fill = value)) +
   labs(title = "Corrélations avec la variable tot dans shrimpsdata97", x = "", y = "") +
   coord_fixed()
 ```
-```{r}
+## Variogram
+
+```{r message=FALSE, warning=FALSE}
 coords97 <- shrimpsdataframe97 %>% select(X, Y)
 shrimps_geor97 <- as.geodata(shrimpsdataframe97, 
                              coords.col = 1:2, 
@@ -92,110 +147,224 @@ summary(vv)
 plot(vv,type="b")
 ```
 
-```{r}
-# Recréer l'objet variogram avec la tendance et vérifier la distance maximale
+```{r message=FALSE, warning=FALSE}
+
 vv1 <- variog(shrimps_geor97, trend = "1st", max.dist = 60, lambda = 0)
 vv2 <- variog(shrimps_geor97, trend = ~ bat + temp.maxq1 + temp.minq4p + temp.maxq3p + salinity.maxq3p + salinity.maxq3, max.dist = 60, lambda = 0)
 vv3 <- variog(shrimps_geor97, trend = ~ temp.maxq1 + temp.minq4p + temp.maxq3p + salinity.maxq3p + salinity.maxq3, max.dist = 60, lambda = 0)
 vv4 <- variog(shrimps_geor97, trend = ~ salinity.maxq3p + salinity.maxq3, max.dist = 60, lambda = 0)
 
-# Créer un seul graphique pour comparer les variogrammes
+
 plot(vv1, type = "b", col = "blue", xlab = "Distance", ylab = "Semivariance", main = "Comparison of Variograms with Different Trends")
 lines(vv2$u, vv2$v, type = "b", col = "red", pch = 2)
 lines(vv3$u, vv3$v, type = "b", col = "green", pch = 3)
 lines(vv4$u, vv4$v, type = "b", col = "purple", pch = 4)
 
-# Ajouter une légende
+
 legend("bottomright", legend = c("Trend: 1st order", "Trend: bat + temp + salinity", "Trend: temp + salinity", "Trend: salinity only"),
        col = c("blue", "red", "green", "purple"), pch = c(1, 2, 3, 4))
 ```
+We pick the most complex option as it seems to reach the top and level off unlike others. It looks stationary 
 
-
-```{r}
-# Recréer l'objet variogram avec la tendance et vérifier la distance maximale
+```{r message=FALSE, warning=FALSE}
 vv <- variog(shrimps_geor97, trend = ~ bat + temp.maxq1 + temp.minq4p + temp.maxq3p + salinity.maxq3p + salinity.maxq3, max.dist = 60, lambda = 0)
 plot(vv, type = "b")
 
-# Ajustement du modèle exponentiel
 vv.exp <- likfit(shrimps_geor97, trend = ~ bat + temp.maxq1 + temp.minq4p + temp.maxq3p + salinity.maxq3p + salinity.maxq3, 
                  cov.model = "exponential", ini.cov.pars = c(2000, 60), lambda = 0, nugget = 1)
 lines.variomodel(vv.exp, col = "red")
 
-# Ajustement du modèle sphérique
 vv.sph <- likfit(shrimps_geor97, trend = ~ bat + temp.maxq1 + temp.minq4p + temp.maxq3p + salinity.maxq3p + salinity.maxq3, 
                  cov.model = "spherical", ini.cov.pars = c(2000, 60), lambda = 0, nugget = 1)
 lines.variomodel(vv.sph, col = "blue")
 
-# Ajustement du modèle Gaussian
 vv.gau <- likfit(shrimps_geor97, trend = ~ bat + temp.maxq1 + temp.minq4p + temp.maxq3p + salinity.maxq3p + salinity.maxq3, 
                  cov.model = "gaussian", ini.cov.pars = c(2000, 60), lambda = 0, nugget = 1)
 lines.variomodel(vv.gau, col = "green")
 
-# Ajouter une légende au graphique
-legend("bottomright", legend = c("Exponential", "Spherical","Gaussian"), 
-       col = c("red", "blue","green"), lty = 1, bty = "n")
+vv.matern1 <- likfit(shrimps_geor97, trend = ~ bat + temp.maxq1 + temp.minq4p + temp.maxq3p + salinity.maxq3p + salinity.maxq3,
+                    cov.model = "matern", ini.cov.pars = c(2000, 60), lambda = 0, nugget = 1, kappa = 0.3) 
+
+lines.variomodel(vv.matern1, col = "purple")
+
+vv.matern2 <- likfit(shrimps_geor97, trend = ~ bat + temp.maxq1 + temp.minq4p + temp.maxq3p + salinity.maxq3p + salinity.maxq3,
+                    cov.model = "matern", ini.cov.pars = c(2000, 60), lambda = 0, nugget = 1, kappa = 1.2) # 
+
+lines.variomodel(vv.matern2, col = "orange")
+
+legend("bottomright", legend = c("Exponential", "Spherical", "Gaussian", "Matern (0.3)", "Matern (1.2)"),
+       col = c("red", "blue", "green", "purple", "orange"), lty = 1, bty = "n")
+
+
 ```
-```{r}
+As it was dicussed in the previous homework, Gaussian and Matern (for certain kappas) have a curve at the beginning. This may contradict the perceived shape of the variogram, however if the curve is small and the overall fir is good Gaussian can still perform well. In any case, we have other models and its good to have Gaussian just for comparison.
+
+
+```{r include=FALSE}
 cv.exp <- xvalid(shrimps_geor97, model = vv.exp)
 cv.sph <- xvalid(shrimps_geor97, model = vv.sph)
 cv.gau <- xvalid(shrimps_geor97, model = vv.gau)
+cv.matern1 <- xvalid(shrimps_geor97, model = vv.matern1)
+cv.matern2 <- xvalid(shrimps_geor97, model = vv.matern2)
 
 error.exp <- mean(cv.exp$std.error^2)
 error.sph <- mean(cv.sph$std.error^2)
 error.gau <- mean(cv.gau$std.error^2)
+error.matern1 <- mean(cv.matern1$std.error^2)
+error.matern2 <- mean(cv.matern2$std.error^2)
 
-print(error.exp)
-print(error.sph)
-print(error.gau)
 ```
+
+
 ```{r}
-kriging_result_97 <- krige.conv(
-  geodata = shrimps_geor97,
-  locations = grid_1997[, c("X", "Y")],
-  krige = krige.control(obj.model = vv.exp))
+summary_exp <- summary(vv.exp)
+summary_sph <- summary(vv.sph)
+summary_gau <- summary(vv.gau)
+summary_matern1 <- summary(vv.matern1)
+summary_matern2 <- summary(vv.matern2)
 
-z_matrix_97 <- matrix(kriging_result_97$predict, nrow = length(unique(grid_1997$Y)), ncol = length(unique(grid_1997$X)))
+loglik_exp <- summary_exp$likelihood$log.L
+aic_exp <- summary_exp$likelihood$AIC
+bic_exp <- summary_exp$likelihood$BIC
 
-long_data <- melt(z_matrix_97)
-colnames(long_data) <- c("Y", "X", "Value")
+loglik_sph <- summary_sph$likelihood$log.L
+aic_sph <- summary_sph$likelihood$AIC
+bic_sph <- summary_sph$likelihood$BIC
 
-ggplot(long_data, aes(x = X, y = Y, fill = Value)) +
-  geom_tile() +
-  scale_fill_gradientn(colours = terrain.colors(10)) +
-  labs(title = "Kriging Result 1997",
-       x = "X",
-       y = "Y") +
-  theme_minimal()
-```
-```{r}
-low_97 <- kriging_result_97$predict - 1.96 * sqrt(kriging_result$krige.var)
-up_97 <- kriging_result_97$predict + 1.96 * sqrt(kriging_result$krige.var)
+loglik_gau <- summary_gau$likelihood$log.L
+aic_gau <- summary_gau$likelihood$AIC
+bic_gau <- summary_gau$likelihood$BIC
 
-result_table97 <- data.frame(
-  grid_1997,
-  Predicted_Value = kriging_result_97$predict,
-  Lower_Bound = low_97,
-  Upper_Bound = up_97
+loglik_matern1 <- summary_matern1$likelihood$log.L
+aic_matern1 <- summary_matern1$likelihood$AIC
+bic_matern1 <- summary_matern1$likelihood$BIC
+
+loglik_matern2 <- summary_matern2$likelihood$log.L
+aic_matern2 <- summary_matern2$likelihood$AIC
+bic_matern2 <- summary_matern2$likelihood$BIC
+
+cv_exp <- mean(cv.exp$std.error^2)
+cv_sph <- mean(cv.sph$std.error^2)
+cv_gau <- mean(cv.gau$std.error^2)
+cv_matern1 <- mean(cv.matern1$std.error^2)
+cv_matern2 <- mean(cv.matern2$std.error^2)
+
+model_comparison <- data.frame(
+  Model = c("Exponential", "Spherical", "Gaussian", "Matern (0.3)", "Matern (1.2)"),
+  LogLikelihood = c(loglik_exp, loglik_sph, loglik_gau, loglik_matern1, loglik_matern2),
+  AIC = c(aic_exp, aic_sph, aic_gau, aic_matern1, aic_matern2),
+  BIC = c(bic_exp, bic_sph, bic_gau, bic_matern1, bic_matern2),
+  CrossValidationError = c(cv_exp, cv_sph, cv_gau, cv_matern1, cv_matern2)
 )
 
-print(result_table)
+print(model_comparison)
+
+
 ```
-```{r}
-ggplot(result_table97, aes(x = X, y = Y)) +
-  # Confidence interval as shaded area
-  geom_tile(aes(fill = Predicted_Value)) +
-  geom_tile(aes(fill = Lower_Bound), alpha = 0.4) +
-  geom_tile(aes(fill = Upper_Bound), alpha = 0.4) +
-  geom_point(data = shrimps_geor97$coords, aes(x = X, y = Y), color = "red", size = 1) +
-  scale_fill_gradient(low = "lightblue", high = "darkblue") +
-  labs(title = "Predicted Values with 95% Confidence Intervals", fill = "Prediction") +
+The models are all pretty close. As before, CV is the main criterion and it leads us to choose Matern with kappa = 0.3
+
+
+
+```{r message=FALSE, warning=FALSE}
+
+
+kriging_result <- krige.conv(
+  geodata = shrimps_geor97,               
+  locations = grid_1997[, c("X", "Y")],    
+  krige = krige.control(
+    obj.model = vv.matern1              
+  )
+)
+
+```
+
+
+```{r message=FALSE, warning=FALSE}
+predicted_grid <- cbind(
+  grid_1997,
+  Prediction = kriging_result$predict,
+  Variance = kriging_result$krige.var,
+  Lower_CI = kriging_result$predict - 1.96 * sqrt(kriging_result$krige.var),
+  Upper_CI = kriging_result$predict + 1.96 * sqrt(kriging_result$krige.var)
+)
+
+ggplot(predicted_grid, aes(x = X, y = Y, fill = Prediction)) +
+  geom_tile() +
+  scale_fill_viridis_c() +
+  labs(title = "Kriging Prediction Map (Matern 0.3)", fill = "Predicted Value") +
   theme_minimal()
+
+ggplot(predicted_grid, aes(x = X, y = Y, fill = Lower_CI)) +
+  geom_tile() +
+  scale_fill_viridis_c() +
+  labs(title = "Kriging Lower Bound (95% CI, Matern 0.3)", fill = "Lower 95% CI") +
+  theme_minimal()
+
+ggplot(predicted_grid, aes(x = X, y = Y, fill = Upper_CI)) +
+  geom_tile() +
+  scale_fill_viridis_c() +
+  labs(title = "Kriging Upper Bound (95% CI, Matern 0.3)", fill = "Upper 95% CI") +
+  theme_minimal()
+
+ggplot(predicted_grid, aes(x = X, y = Y, fill = Variance)) +
+  geom_tile() +
+  scale_fill_viridis_c() +
+  labs(title = "Kriging Variance Map (Matern 0.3)", fill = "Variance") +
+  theme_minimal()
+
+```
+
+It should be noted that biomass, of course, cannot be negative. So, techically we could set all negative values for the lower bound to 0, but then the whole grid would look the same (0s everywhere). This issue is most likely due to large variance.
+
+
+
+# Year 2006 :
+
+## PCA
+
+```{r message=FALSE, warning=FALSE}
+shrimpsdata06_acp <- shrimpsdata06 %>%
+    select(where(is.numeric)) %>%
+    select(-matches("ANNO"))  # Exclude the year column if present
+
+acp_result_2006 <- PCA(shrimpsdata06_acp, graph = FALSE)
+
+fviz_pca_var(acp_result_2006,
+    col.var = ifelse(rownames(acp_result_2006$var$coord) == "tot", "grey", "red"),
+    repel = TRUE,
+    title = "Variables with emphasis on 'tot' for 2006"
+)
+
+fviz_contrib(acp_result_2006, choice = "var", axes = 1, top = 10, title = "Axis 1 - 2006")
+fviz_contrib(acp_result_2006, choice = "var", axes = 2, top = 10, title = "Axis 2 - 2006")
+
+```
+
+## Correlation
+
+```{r message=FALSE, warning=FALSE}
+correlation_matrix06 <- cor(shrimpsdata06)
+correlation_matrix_melted06 <- melt(correlation_matrix06)
+correlation_matrix_tot06 <- correlation_matrix_melted06 %>%
+    filter(Var1 == "tot" & Var2 != "ANNO")
+
+ggplot(data = correlation_matrix_tot06, aes(x = Var2, y = Var1, fill = value)) +
+    geom_tile(color = "white") +
+    geom_text(aes(label = round(value, 2)), color = "black", size = 2) +
+    scale_fill_gradient2(low = "blue", high = "red", mid = "white", midpoint = 0, limit = c(-1, 1), space = "Lab", 
+                         name = "Correlation") +
+    theme_minimal() + 
+    theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1)) +
+    labs(title = "Correlations with 'tot' variable in shrimpsdata06", x = "", y = "") +
+    coord_fixed()
+
+
 ```
 
 
-For Year 2006 :
 
-```{r}
+
+```{r message=FALSE, warning=FALSE}
 coords06 <- shrimpsdataframe06 %>% select(X, Y)
 shrimps_geor06 <- as.geodata(shrimpsdataframe06, 
                              coords.col = 1:2, 
@@ -207,103 +376,154 @@ summary(vv)
 plot(vv,type="b")
 ```
 
-```{r}
-# Recréer l'objet variogram avec la tendance et vérifier la distance maximale
+```{r message=FALSE, warning=FALSE}
 vv1 <- variog(shrimps_geor06, trend = "1st", max.dist = 60, lambda = 0)
 vv2 <- variog(shrimps_geor06, trend = ~ bat + temp.maxq1 + temp.minq4p + temp.maxq3p + salinity.maxq3p + salinity.maxq3, max.dist = 60, lambda = 0)
 vv3 <- variog(shrimps_geor06, trend = ~ temp.maxq1 + temp.minq4p + temp.maxq3p + salinity.maxq3p + salinity.maxq3, max.dist = 60, lambda = 0)
 vv4 <- variog(shrimps_geor06, trend = ~ salinity.maxq3p + salinity.maxq3, max.dist = 60, lambda = 0)
 
-# Créer un seul graphique pour comparer les variogrammes
 plot(vv1, type = "b", col = "blue", xlab = "Distance", ylab = "Semivariance", main = "Comparison of Variograms with Different Trends")
 lines(vv2$u, vv2$v, type = "b", col = "red", pch = 2)
 lines(vv3$u, vv3$v, type = "b", col = "green", pch = 3)
 lines(vv4$u, vv4$v, type = "b", col = "purple", pch = 4)
 
-# Ajouter une légende
 legend("bottomright", legend = c("Trend: 1st order", "Trend: bat + temp + salinity", "Trend: temp + salinity", "Trend: salinity only"),
        col = c("blue", "red", "green", "purple"), pch = c(1, 2, 3, 4))
 ```
 
 
-```{r}
-# Recréer l'objet variogram avec la tendance et vérifier la distance maximale
-vv <- variog(shrimps_geor06, trend = ~ bat + temp.maxq3p , max.dist = 60, lambda = 0)
+```{r message=FALSE, warning=FALSE}
+vv <- variog(shrimps_geor06, trend = ~ bat + temp.maxq1 + temp.minq4p + temp.maxq3p + salinity.maxq3, max.dist = 60, lambda = 0)
 plot(vv, type = "b")
 
-# Ajustement du modèle exponentiel
-vv.exp <- likfit(shrimps_geor06, trend = ~ bat + temp.maxq3p, 
+vv.exp <- likfit(shrimps_geor06, trend = ~ bat + temp.maxq1 + temp.minq4p + temp.maxq3p + salinity.maxq3,
                  cov.model = "exponential", ini.cov.pars = c(2000, 60), lambda = 0, nugget = 1)
 lines.variomodel(vv.exp, col = "red")
 
-# Ajustement du modèle sphérique
-vv.sph <- likfit(shrimps_geor06, trend = ~ bat + temp.maxq3p, 
+vv.sph <- likfit(shrimps_geor06, trend = ~ bat + temp.maxq1 + temp.minq4p + temp.maxq3p + salinity.maxq3,
                  cov.model = "spherical", ini.cov.pars = c(2000, 60), lambda = 0, nugget = 1)
 lines.variomodel(vv.sph, col = "blue")
 
-vv.gau <- likfit(shrimps_geor06, trend = ~ bat + temp.maxq3p, 
+vv.gau <- likfit(shrimps_geor06, trend = ~ bat + temp.maxq1 + temp.minq4p + temp.maxq3p + salinity.maxq3,
                  cov.model = "gaussian", ini.cov.pars = c(2000, 60), lambda = 0, nugget = 1)
 lines.variomodel(vv.gau, col = "green")
 
-# Ajouter une légende au graphique
-legend("bottomright", legend = c("Exponential", "Spherical","Gaussian"), 
-       col = c("red", "blue","green"), lty = 1, bty = "n")
+vv.matern1 <- likfit(shrimps_geor06, trend = ~ bat + temp.maxq1 + temp.minq4p + temp.maxq3p + salinity.maxq3,
+                     cov.model = "matern", ini.cov.pars = c(2000, 60), lambda = 0, nugget = 1, kappa = 0.3)
+lines.variomodel(vv.matern1, col = "purple")
+
+vv.matern2 <- likfit(shrimps_geor06, trend = ~ bat + temp.maxq1 + temp.minq4p + temp.maxq3p + salinity.maxq3,
+                     cov.model = "matern", ini.cov.pars = c(2000, 60), lambda = 0, nugget = 1, kappa = 1.1)
+lines.variomodel(vv.matern2, col = "orange")
+
+legend("bottomright", legend = c("Exponential", "Spherical", "Gaussian", "Matern (0.3)", "Matern (1.1)"),
+       col = c("red", "blue", "green", "purple", "orange"), lty = 1, bty = "n")
+
 ```
-```{r}
-cv.exp <- xvalid(shrimps_geor97, model = vv.exp)
-cv.sph <- xvalid(shrimps_geor97, model = vv.sph)
-cv.gau <- xvalid(shrimps_geor97, model = vv.gau)
+Here the variogram does not really look stationary. It is not terribly unstable but there is no cleare range and sill. Also, in this case the Gaussian shape can be justified.
+
+
+```{r message=FALSE, warning=FALSE}
+cv.exp <- xvalid(shrimps_geor06, model = vv.exp)
+cv.sph <- xvalid(shrimps_geor06, model = vv.sph)
+cv.gau <- xvalid(shrimps_geor06, model = vv.gau)
+cv.matern1 <- xvalid(shrimps_geor06, model = vv.matern1)
+cv.matern2 <- xvalid(shrimps_geor06, model = vv.matern2)
 
 error.exp <- mean(cv.exp$std.error^2)
 error.sph <- mean(cv.sph$std.error^2)
 error.gau <- mean(cv.gau$std.error^2)
+error.matern1 <- mean(cv.matern1$std.error^2)
+error.matern2 <- mean(cv.matern2$std.error^2)
 
-print(error.exp)
-print(error.sph)
-print(error.gau)
-```
+summary_exp <- summary(vv.exp)
+summary_sph <- summary(vv.sph)
+summary_gau <- summary(vv.gau)
+summary_matern1 <- summary(vv.matern1)
+summary_matern2 <- summary(vv.matern2)
 
-```{r}
-kriging_result_06 <- krige.conv(
-  geodata = shrimps_geor06,
-  locations = grid_2006[, c("X", "Y")],
-  krige = krige.control(obj.model = vv.exp))
+loglik_exp <- summary_exp$likelihood$log.L
+aic_exp <- summary_exp$likelihood$AIC
+bic_exp <- summary_exp$likelihood$BIC
 
-z_matrix_06 <- matrix(kriging_result_06$predict, nrow = length(unique(grid_2006$Y)), ncol = length(unique(grid_2006$X)))
+loglik_sph <- summary_sph$likelihood$log.L
+aic_sph <- summary_sph$likelihood$AIC
+bic_sph <- summary_sph$likelihood$BIC
 
-long_data <- melt(z_matrix_06)
-colnames(long_data) <- c("Y", "X", "Value")
+loglik_gau <- summary_gau$likelihood$log.L
+aic_gau <- summary_gau$likelihood$AIC
+bic_gau <- summary_gau$likelihood$BIC
 
-ggplot(long_data, aes(x = X, y = Y, fill = Value)) +
-  geom_tile() +
-  scale_fill_gradientn(colours = terrain.colors(10)) +
-  labs(title = "Kriging Result 1997",
-       x = "X",
-       y = "Y") +
-  theme_minimal()
-```
-```{r}
-low_06 <- kriging_result_97$predict - 1.96 * sqrt(kriging_result$krige.var)
-up_06 <- kriging_result_97$predict + 1.96 * sqrt(kriging_result$krige.var)
+loglik_matern1 <- summary_matern1$likelihood$log.L
+aic_matern1 <- summary_matern1$likelihood$AIC
+bic_matern1 <- summary_matern1$likelihood$BIC
 
-result_table06 <- data.frame(
-  grid_2006,
-  Predicted_Value = kriging_result_06$predict,
-  Lower_Bound = low_06,
-  Upper_Bound = up_06
+loglik_matern2 <- summary_matern2$likelihood$log.L
+aic_matern2 <- summary_matern2$likelihood$AIC
+bic_matern2 <- summary_matern2$likelihood$BIC
+
+model_comparison <- data.frame(
+  Model = c("Exponential", "Spherical", "Gaussian", "Matern (0.3)", "Matern (1.1)"),
+  LogLikelihood = c(loglik_exp, loglik_sph, loglik_gau, loglik_matern1, loglik_matern2),
+  AIC = c(aic_exp, aic_sph, aic_gau, aic_matern1, aic_matern2),
+  BIC = c(bic_exp, bic_sph, bic_gau, bic_matern1, bic_matern2),
+  CrossValidationError = c(error.exp, error.sph, error.gau, error.matern1, error.matern2)
 )
 
-print(result_table)
+print(model_comparison)
+
+
 ```
+
+Here Gaussian yeild the best CV scores.
+
+
+```{r include=FALSE}
+kriging_result <- krige.conv(
+  geodata = shrimps_geor06,          
+  locations = grid_2006[, c("X", "Y")],  
+  krige = krige.control(
+    obj.model = vv.gau      
+  )
+)
+```
+
 ```{r}
-ggplot(result_table06, aes(x = X, y = Y)) +
-  # Confidence interval as shaded area
-  geom_tile(aes(fill = Predicted_Value)) +
-  geom_tile(aes(fill = Lower_Bound), alpha = 0.4) +
-  geom_tile(aes(fill = Upper_Bound), alpha = 0.4) +
-  geom_point(data = shrimps_geor97$coords, aes(x = X, y = Y), color = "red", size = 1) +
-  scale_fill_gradient(low = "lightblue", high = "darkblue") +
-  labs(title = "Predicted Values with 95% Confidence Intervals", fill = "Prediction") +
+
+predicted_grid <- cbind(
+  grid_2006,
+  Prediction = kriging_result$predict,
+  Variance = kriging_result$krige.var,
+  Lower_CI = kriging_result$predict - 1.96 * sqrt(kriging_result$krige.var),
+  Upper_CI = kriging_result$predict + 1.96 * sqrt(kriging_result$krige.var)
+)
+
+ggplot(predicted_grid, aes(x = X, y = Y, fill = Prediction)) +
+  geom_tile() +
+  scale_fill_viridis_c() +
+  labs(title = "Kriging Prediction Map (Gaussian, 2006)", fill = "Predicted Value") +
   theme_minimal()
+
+ggplot(predicted_grid, aes(x = X, y = Y, fill = Lower_CI)) +
+  geom_tile() +
+  scale_fill_viridis_c() +
+  labs(title = "Kriging Lower Bound (95% CI, Gaussian, 2006)", fill = "Lower 95% CI") +
+  theme_minimal()
+
+ggplot(predicted_grid, aes(x = X, y = Y, fill = Upper_CI)) +
+  geom_tile() +
+  scale_fill_viridis_c() +
+  labs(title = "Kriging Upper Bound (95% CI, Gaussian, 2006)", fill = "Upper 95% CI") +
+  theme_minimal()
+
+ggplot(predicted_grid, aes(x = X, y = Y, fill = Variance)) +
+  geom_tile() +
+  scale_fill_viridis_c() +
+  labs(title = "Kriging Variance Map (Gaussian, 2006)", fill = "Variance") +
+  theme_minimal()
+
 ```
+
+The same comment about variance. If we go back to original maps and values, obtained predictions for both years don't seem off. However, the variance for both years is very large and 0 is in the confidence interval everywhere
+
 

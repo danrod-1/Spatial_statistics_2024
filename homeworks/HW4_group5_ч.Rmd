@@ -1,0 +1,275 @@
+---
+title: "Homework 4"
+output: html_document
+author: "Daniil Rodionov, Hugo Aubert"
+---
+
+```{r}
+rm(list = ls())
+```
+
+List of the useful packages
+
+```{r message=FALSE, warning=FALSE, include=FALSE}
+suppressWarnings(suppressPackageStartupMessages(require(MASS)))
+suppressWarnings(suppressPackageStartupMessages(require(MBA)))
+suppressWarnings(suppressPackageStartupMessages(require(gstat)))
+suppressWarnings(suppressPackageStartupMessages(require(sf)))
+suppressWarnings(suppressPackageStartupMessages(require(geoR)))
+suppressWarnings(suppressPackageStartupMessages(require(ggplot2)))
+suppressWarnings(suppressPackageStartupMessages(require(corrplot)))
+suppressWarnings(suppressPackageStartupMessages(require(dplyr)))
+suppressWarnings(suppressPackageStartupMessages(require(sp)))
+suppressWarnings(suppressPackageStartupMessages(require(RColorBrewer)))
+```
+
+```{r}
+load("C:/DS/Spatial_statistics/data/shrimpsfull.RData")
+load("C:/DS/Spatial_statistics/data/AllGrids.RData")
+
+```
+
+```{r}
+data <- shrimpsdata[shrimpsdata$ANNO %in% c(1997, 2006), ]
+data_1997 <- data[data$ANNO == 1997, ]
+data_2006 <- data[data$ANNO == 2006, ]
+```
+
+```{r}
+# Use geoR package for creating empirical variograms
+
+# Prepare data for 1997 and 2006 as geoR objects
+data_1997_geo <- as.geodata(data_1997, coords.col = c("X", "Y"), data.col = "tot")
+data_2006_geo <- as.geodata(data_2006, coords.col = c("X", "Y"), data.col = "tot")
+
+# Calculate empirical variograms for both datasets without max distance restriction
+variog_1997 <- variog(data_1997_geo)
+variog_2006 <- variog(data_2006_geo)
+
+# Plot the empirical variograms
+plot(variog_1997, main = "Empirical Variogram for 1997", xlab = "Distance", ylab = "Semivariance", type = "b")
+plot(variog_2006, main = "Empirical Variogram for 2006", xlab = "Distance", ylab = "Semivariance", type = "b")
+
+```
+
+```{r}
+# Load necessary libraries
+library(ggplot2)
+library(dplyr)
+library(gridExtra)
+
+# Prepare data for mapping for 1997 and 2006
+shrimpsdata97 <- shrimpsdata %>% filter(ANNO == 1997)
+shrimpsdata06 <- shrimpsdata %>% filter(ANNO == 2006)
+
+# Define a color gradient that includes a light color for zero values but doesn't vanish
+color_with_zero <- c("lightgrey", "yellow", "orange", "red", "darkred")
+
+# Map for 1997 - showing zeroes as lighter color
+map_1997_with_zero <- ggplot(shrimpsdata97, aes(x = X, y = Y)) +
+  geom_point(aes(color = tot), size = 2) +
+  scale_color_gradientn(colors = color_with_zero, limits = c(0, max(shrimpsdata97$tot)), na.value = "white") +
+  labs(title = "Spatial Distribution of 'tot' in 1997 (Zeroes Visible)", color = "Total") +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5))
+
+# Map for 1997 - excluding zeroes
+map_1997_no_zero <- ggplot(shrimpsdata97 %>% filter(tot > 0), aes(x = X, y = Y)) +
+  geom_point(aes(color = tot), size = 2) +
+  scale_color_gradientn(colors = color_with_zero[-1], limits = c(min(shrimpsdata97$tot[shrimpsdata97$tot > 0]), max(shrimpsdata97$tot)), na.value = "white") +
+  labs(title = "Spatial Distribution of 'tot' in 1997 (Without Zeroes)", color = "Total") +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5))
+
+# Map for 2006 - showing zeroes as lighter color
+map_2006_with_zero <- ggplot(shrimpsdata06, aes(x = X, y = Y)) +
+  geom_point(aes(color = tot), size = 2) +
+  scale_color_gradientn(colors = color_with_zero, limits = c(0, max(shrimpsdata06$tot)), na.value = "white") +
+  labs(title = "Spatial Distribution of 'tot' in 2006 (Zeroes Visible)", color = "Total") +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5))
+
+# Map for 2006 - excluding zeroes
+map_2006_no_zero <- ggplot(shrimpsdata06 %>% filter(tot > 0), aes(x = X, y = Y)) +
+  geom_point(aes(color = tot), size = 2) +
+  scale_color_gradientn(colors = color_with_zero[-1], limits = c(min(shrimpsdata06$tot[shrimpsdata06$tot > 0]), max(shrimpsdata06$tot)), na.value = "white") +
+  labs(title = "Spatial Distribution of 'tot' in 2006 (Without Zeroes)", color = "Total") +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5))
+
+# Display maps in a 2x2 grid layout
+grid.arrange(map_1997_with_zero, map_1997_no_zero, map_2006_with_zero, map_2006_no_zero, ncol = 2)
+
+
+```
+```
+```{r}
+# Plot number of observations in each distance bin
+barplot(variog_1997$n, names.arg = round(variog_1997$u, 1),
+        xlab = "Distance Bins", ylab = "Number of Observations",
+        main = "Number of Observations in Each Distance Bin (1997)",
+        col = "lightblue")
+```
+```{r}
+# Assumes geoR package is loaded for creating empirical variograms
+
+# Define the empirical variograms for 1997 and 2006 data with max distance set to 250
+variog_1997_restricted <- variog(data_1997_geo, max.dist = 270)
+variog_2006_restricted <- variog(data_2006_geo, max.dist = 270)
+
+# Plot the restricted empirical variograms
+par(mfrow = c(1, 2)) # Set up the plot area for side-by-side plotting
+plot(variog_1997_restricted, main = "Empirical Variogram for 1997 (Restricted to 250 units)", 
+     xlab = "Distance", ylab = "Semivariance", type = "b")
+plot(variog_2006_restricted, main = "Empirical Variogram for 2006 (Restricted to 250 units)", 
+     xlab = "Distance", ylab = "Semivariance", type = "b")
+
+
+```
+```{r}
+# Assumes geoR package is loaded for creating directional empirical variograms
+
+# Define directions in degrees and convert to radians
+directions_deg <- c(0, 45, 90, 135)
+directions_rad <- directions_deg * (pi / 180) # Convert to radians
+colors <- c("red", "blue", "green", "purple") # Colors for each direction
+
+# Calculate empirical variograms for different directions with max distance set to 250
+variograms_1997 <- list()
+variograms_2006 <- list()
+
+for (i in seq_along(directions_rad)) {
+  dir <- directions_rad[i]
+  variograms_1997[[i]] <- variog(data_1997_geo, max.dist = 250, direction = dir)
+  variograms_2006[[i]] <- variog(data_2006_geo, max.dist = 250, direction = dir)
+}
+
+# Adjust margins to maximize plot space
+par(mar = c(5, 5, 4, 5), mfrow = c(1, 1))
+
+# Plot the first directional variogram for 1997
+plot(variograms_1997[[1]]$u, variograms_1997[[1]]$v, type = "b", col = colors[1],
+     main = "Directional Variograms for 1997 (Restricted to 250)", xlab = "Distance",
+     ylab = "Semivariance", xlim = c(0, 250), ylim = c(0, max(sapply(variograms_1997, function(v) max(v$v, na.rm = TRUE)))),
+     cex.main = 1.2, cex.lab = 0.9, cex.axis = 0.9)
+
+# Overlay the other directional variograms for 1997
+for (i in 2:length(directions_deg)) {
+    lines(variograms_1997[[i]]$u, variograms_1997[[i]]$v, type = "b", col = colors[i])
+}
+
+# Place the legend slightly inside the plot area to prevent cutoff
+legend("topright", x.intersp = -0.2, y.intersp = 1.5, legend = paste("Direction", directions_deg, "°"),
+       col = colors, lty = 1, pch = 1, title = "Angles", bty = "n", cex = 0.75)
+
+
+# Set up global plot parameters with moderate space adjustments
+par(mar = c(5, 5, 4, 5) + 0.1, mfrow = c(1, 1))
+
+
+
+# Plot the first directional variogram for 2006 with adjusted label sizes
+plot(variograms_2006[[1]]$u, variograms_2006[[1]]$v, type = "b", col = colors[1],
+     main = "Directional Variograms for 2006 (Restricted to 250)", xlab = "Distance",
+     ylab = "Semivariance", xlim = c(0, 250), ylim = c(0, max(sapply(variograms_2006, function(v) max(v$v, na.rm = TRUE)))),
+     cex.main = 1.2, cex.lab = 1, cex.axis = 0.8)
+
+# Overlay the other directional variograms for 2006
+for (i in 2:length(directions_deg)) {
+    lines(variograms_2006[[i]]$u, variograms_2006[[i]]$v, type = "b", col = colors[i])
+}
+
+# Add a legend with smaller text and adjusted position
+legend("topright", inset = c(-0.05, 0), legend = paste("Direction", directions_deg, "°"),
+       col = colors, lty = 1, pch = 1, title = "Angles", bty = "n", cex = 0.9)
+
+
+
+```
+
+```{r}
+old_par <- par(no.readonly = TRUE)
+
+par(mar = c(5, 5, 5, 5))  
+
+
+options(repr.plot.width = 18, repr.plot.height = 18)  
+
+
+cor_matrix <- cor(data)
+
+
+corrplot(cor_matrix, 
+         method = "color", 
+         tl.col = "black", 
+         tl.cex = 0.7,   
+         tl.srt = 45,    
+         col = colorRampPalette(c("blue", "white", "red"))(200), 
+         addCoef.col = "black",
+         number.cex = 0.3,        
+         title = "Correlation between 'tot' and other variables",
+         mar = c(0, 0, 2, 0))     
+
+par(old_par)
+
+```
+```{r}
+cor_tot <- cor_matrix[, "tot", drop = FALSE]
+cor_tot <- t(cor_tot)  
+
+
+corrplot(cor_tot, method = "color", tl.col = "black", tl.srt = 45, 
+         col = colorRampPalette(c("blue", "white", "red"))(200),  
+         addCoef.col = "black", 
+         number.cex = 0.55,       
+         title = "Correlation between 'tot' and other variables",
+         mar = c(0, 0, 2, 0))   
+```
+```{r}
+# Re-create the geoR object with covariates included
+data_1997_geo_full <- as.geodata(data_1997, coords.col = c("X", "Y"),
+                                 data.col = "tot",
+                                 covariates = ~ Recruits + Spawners + salinity.min3q + salinity.max3q +
+                                               temp.min3q + temp.max3q)
+
+data_2006_geo_full <- as.geodata(data_2006, coords.col = c("X", "Y"),
+                                 data.col = "tot",
+                                 covariates = ~ Recruits + Spawners + salinity.min3q + salinity.max3q +
+                                               temp.min3q + temp.max3q)
+
+```
+
+```{r}
+# Calculate the restricted empirical variograms with 1st-order trend using covariates for 1997 and 2006
+variog_1997_restricted <- variog(data_1997_geo_full, max.dist = 270,
+                                 trend = ~ Recruits + Spawners + 
+                                          salinity.minq3 + salinity.maxq3 +
+                                          salinity.minq3p + salinity.maxq3p +
+                                          temp.minq3 + temp.maxq3 +
+                                          temp.minq3p + temp.maxq3p)
+
+variog_2006_restricted <- variog(data_2006_geo_full, max.dist = 270,
+                                 trend = ~ Recruits + Spawners + 
+                                          salinity.minq3 + salinity.maxq3 +
+                                          salinity.minq3p + salinity.maxq3p +
+                                          temp.minq3 + temp.maxq3 +
+                                          temp.minq3p + temp.maxq3p)
+
+```
+
+
+```{r}
+# Plot the restricted empirical variograms side-by-side
+par(mfrow = c(1, 2))  # Set up the plot area for side-by-side comparison
+
+# Plot for 1997
+plot(variog_1997_restricted, main = "Empirical Variogram for 1997 (Restricted to 270, 1st Order Trend with Covariates)",
+     xlab = "Distance", ylab = "Semivariance", type = "b")
+
+# Plot for 2006
+plot(variog_2006_restricted, main = "Empirical Variogram for 2006 (Restricted to 270, 1st Order Trend with Covariates)",
+     xlab = "Distance", ylab = "Semivariance", type = "b")
+
+```
+
+
