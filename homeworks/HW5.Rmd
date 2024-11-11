@@ -1,0 +1,93 @@
+---
+title: "HW5"
+output: html_document
+author: "Daniil Rodionov, Hugo Aubert"
+date: "2024-11-09"
+---
+
+```{r}
+rm(list = ls())
+```
+
+List of the useful packages
+
+```{r message=FALSE, warning=FALSE, include=FALSE}
+suppressWarnings(suppressPackageStartupMessages(require(MASS)))
+suppressWarnings(suppressPackageStartupMessages(require(MBA)))
+suppressWarnings(suppressPackageStartupMessages(require(gstat)))
+suppressWarnings(suppressPackageStartupMessages(require(sf)))
+suppressWarnings(suppressPackageStartupMessages(require(geoR)))
+suppressWarnings(suppressPackageStartupMessages(require(ggplot2)))
+suppressWarnings(suppressPackageStartupMessages(require(corrplot)))
+suppressWarnings(suppressPackageStartupMessages(require(dplyr)))
+suppressWarnings(suppressPackageStartupMessages(require(sp)))
+suppressWarnings(suppressPackageStartupMessages(require(RColorBrewer)))
+suppressWarnings(suppressPackageStartupMessages(require(reshape2)))
+suppressWarnings(suppressPackageStartupMessages(require(FactoMineR)))
+suppressWarnings(suppressPackageStartupMessages(require(factoextra)))
+```
+
+Year 1997 & 2006 
+
+```{r}
+shrimpsdata97 <- shrimpsdata %>%
+  filter(ANNO == 1997)
+
+shrimpsdata06 <- shrimpsdata %>%
+  filter(ANNO == 2006)
+
+shrimpsdataframe06 <- data.frame(X = shrimpsdata06$X, Y =shrimpsdata06$Y, tot = (shrimpsdata06$tot + 1), bat = shrimpsdata06$bat, tempmax3p = shrimpsdata06$temp.maxq3p, temp.maxq1 = shrimpsdata06$temp.maxq1, temp.minq4p = shrimpsdata06$temp.minq4p, temp.maxq3p = shrimpsdata06$temp.maxq3p, salinity.maxq3p = shrimpsdata06$salinity.maxq3p, salinity.maxq3 = shrimpsdata06$salinity.maxq3)
+
+shrimpsdataframe97 <- data.frame(X = shrimpsdata97$X, Y =shrimpsdata97$Y, tot = (shrimpsdata97$tot + 1), bat = shrimpsdata97$bat, tempmax3p = shrimpsdata97$temp.maxq3p, temp.maxq1 = shrimpsdata97$temp.maxq1 , temp.minq4p = shrimpsdata97$temp.minq4p , temp.maxq3p = shrimpsdata97$temp.maxq3p , salinity.maxq3p = shrimpsdata97$salinity.maxq3p , salinity.maxq3 = shrimpsdata97$salinity.maxq3)
+```
+
+
+```{r}
+kriging_results <- krige.bayes(
+  shrimps_geor97,
+  model = list(cov.model = "exponential"), 
+  prior = list(
+    beta.prior = "flat",              
+    sigmasq.prior = "reciprocal",    
+    phi.discrete = seq(0.1, 100, length = 20) 
+  ),
+  output = list(simulations = TRUE)
+)
+```
+```{r}
+kriging_predictions <- krige.bayes(
+  shrimps_geor97,
+  locations = grid_1997,
+  model = kriging_results$model,
+  output = list(simulations = TRUE)
+)
+```
+```{r}
+# Extract posterior mean and variance
+mean_estimates <- kriging_predictions$predictive$mean
+variance_estimates <- kriging_predictions$predictive$variance
+
+# Calculate 95% credibility intervals based on mean and variance
+# 1.96 * sqrt(variance) gives the margin for the 95% interval
+lower_bound <- mean_estimates - 1.96 * sqrt(variance_estimates)
+upper_bound <- mean_estimates + 1.96 * sqrt(variance_estimates)
+```
+
+```{r}
+results <- data.frame(
+  grid_1997,
+  Estimate = mean_estimates,
+  Lower_CI = lower_bound,
+  Upper_CI = upper_bound
+)
+print(results)
+```
+```{r}
+ggplot(results, aes(x = X, y = Y)) +
+  geom_tile(aes(fill = Estimate)) +
+  geom_point(data = shrimps_geor97$coords, aes(x = X, y = Y), color = "red", size = 1) +
+  scale_fill_gradient(low = "lightblue", high = "darkblue") +
+  labs(title = "Bayesian Kriging Mean Estimates with Credibility Intervals") +
+  theme_minimal()
+```
+
