@@ -25,6 +25,7 @@ suppressWarnings(suppressPackageStartupMessages(require(RColorBrewer)))
 suppressWarnings(suppressPackageStartupMessages(require(reshape2)))
 suppressWarnings(suppressPackageStartupMessages(require(FactoMineR)))
 suppressWarnings(suppressPackageStartupMessages(require(factoextra)))
+suppressWarnings(suppressPackageStartupMessages(require(fields)))
 ```
 
 Year 1997 & 2006 
@@ -36,80 +37,303 @@ shrimpsdata97 <- shrimpsdata %>%
 shrimpsdata06 <- shrimpsdata %>%
   filter(ANNO == 2006)
 
-shrimpsdataframe06 <- data.frame(X = shrimpsdata06$X, Y =shrimpsdata06$Y, tot = (shrimpsdata06$tot + 1), bat = shrimpsdata06$bat, tempmax3p = shrimpsdata06$temp.maxq3p, temp.maxq1 = shrimpsdata06$temp.maxq1, temp.minq4p = shrimpsdata06$temp.minq4p, temp.maxq3p = shrimpsdata06$temp.maxq3p, salinity.maxq3p = shrimpsdata06$salinity.maxq3p, salinity.maxq3 = shrimpsdata06$salinity.maxq3)
+# Add 1 to avoid issues with zero values and then take the logarithm
+shrimpsdata97$log_tot <- log(shrimpsdata97$tot + 1)
 
-shrimpsdataframe97 <- data.frame(X = shrimpsdata97$X, Y =shrimpsdata97$Y, tot = (shrimpsdata97$tot + 1), bat = shrimpsdata97$bat, tempmax3p = shrimpsdata97$temp.maxq3p, temp.maxq1 = shrimpsdata97$temp.maxq1 , temp.minq4p = shrimpsdata97$temp.minq4p , temp.maxq3p = shrimpsdata97$temp.maxq3p , salinity.maxq3p = shrimpsdata97$salinity.maxq3p , salinity.maxq3 = shrimpsdata97$salinity.maxq3)
+# Add 1 to avoid issues with zero values and then take the logarithm
+shrimpsdata06$log_tot <- log(shrimpsdata06$tot + 1)
+
+
+
+shrimpsdataframe06 <- data.frame(X = shrimpsdata06$X, Y =shrimpsdata06$Y, tot = (shrimpsdata06$tot + 1), log_tot = shrimpsdata06$log_tot, bat = shrimpsdata06$bat, tempmax3p = shrimpsdata06$temp.maxq3p, temp.maxq1 = shrimpsdata06$temp.maxq1, temp.minq4p = shrimpsdata06$temp.minq4p, temp.maxq3p = shrimpsdata06$temp.maxq3p, salinity.maxq3p = shrimpsdata06$salinity.maxq3p, salinity.maxq3 = shrimpsdata06$salinity.maxq3)
+
+shrimpsdataframe97 <- data.frame(X = shrimpsdata97$X, Y =shrimpsdata97$Y, tot = (shrimpsdata97$tot + 1), log_tot = shrimpsdata97$log_tot, bat = shrimpsdata97$bat, tempmax3p = shrimpsdata97$temp.maxq3p, temp.maxq1 = shrimpsdata97$temp.maxq1 , temp.minq4p = shrimpsdata97$temp.minq4p , temp.maxq3p = shrimpsdata97$temp.maxq3p , salinity.maxq3p = shrimpsdata97$salinity.maxq3p , salinity.maxq3 = shrimpsdata97$salinity.maxq3)
+
+geo_data06 <- as.geodata(shrimpsdataframe06, coords.col = 1:2, data.col = 3)
+geo_data97 <- as.geodata(shrimpsdataframe97, coords.col = 1:2, data.col = 3)
 ```
 
+For Year 1997
 
 ```{r}
-kriging_results <- krige.bayes(
-  shrimps_geor97,
+set.seed(123)
+
+message("### Bayesian Kriging for Exponential Model ###")
+kriging_bayes_exp <- krige.bayes(
+  geo_data97,
   model = list(cov.model = "exponential"), 
   prior = list(
-    beta.prior = "flat",              
-    sigmasq.prior = "reciprocal",    
-    phi.discrete = seq(0.1, 100, length = 20) 
+    beta.prior = "flat",
+    sigmasq.prior = "reciprocal",
+    phi.discrete = seq(0.1, 100, length = 20)
   ),
+  locations = geo_data97$coords, 
   output = list(simulations = TRUE)
 )
-```
-```{r}
-kriging_predictions <- krige.bayes(
-  shrimps_geor97,
-  locations = grid_1997,
-  model = kriging_results$model,
-  output = list(simulations = TRUE)
-)
-```
-```{r}
-# Extract posterior mean and variance
-mean_estimates <- kriging_predictions$predictive$mean
-variance_estimates <- kriging_predictions$predictive$variance
+message("Exponential model completed")
 
-# Calculate 95% credibility intervals based on mean and variance
-# 1.96 * sqrt(variance) gives the margin for the 95% interval
-lower_bound <- mean_estimates - 1.96 * sqrt(variance_estimates)
-upper_bound <- mean_estimates + 1.96 * sqrt(variance_estimates)
+message("### Bayesian Kriging for Spherical Model ###")
+kriging_bayes_sph <- krige.bayes(
+  geo_data97,
+  model = list(cov.model = "spherical"), 
+  prior = list(
+    beta.prior = "flat",
+    sigmasq.prior = "reciprocal",
+    phi.discrete = seq(0.1, 100, length = 20)
+  ),
+  locations = geo_data97$coords, 
+  output = list(simulations = TRUE)
+)
+message("Spherical model completed")
+
+message("### Bayesian Kriging for Matern (0.3) Model ###")
+kriging_bayes_matern03 <- krige.bayes(
+  geo_data97,
+  model = list(cov.model = "matern", kappa = 0.3), 
+  prior = list(
+    beta.prior = "flat",
+    sigmasq.prior = "reciprocal",
+    phi.discrete = seq(0.1, 100, length = 20)
+  ),
+  locations = geo_data97$coords, 
+  output = list(simulations = TRUE)
+)
+message("Matern (0.3) model completed")
+
+message("### Bayesian Kriging for Matern (1.2) Model ###")
+kriging_bayes_matern12 <- krige.bayes(
+  geo_data97,
+  model = list(cov.model = "matern", kappa = 1.2), 
+  prior = list(
+    beta.prior = "flat",
+    sigmasq.prior = "reciprocal",
+    phi.discrete = seq(0.1, 100, length = 20)
+  ),
+  locations = geo_data97$coords, 
+  output = list(simulations = TRUE)
+)
+message("Matern (1.2) model completed")
 ```
+
+
+
+```{r}
+set.seed(123)
+
+message("### Predictions for Exponential Model ###")
+kriging_predictions_exp <- krige.bayes(
+  geo_data97,
+  locations = grid_1997[, 1:2],  
+  model = kriging_bayes_exp$model,  
+  prior = list(phi.discrete = seq(0.1, 100, length = 20)), 
+  output = list(simulations = TRUE)
+)
+
+mean_exp <- kriging_predictions_exp$predictive$mean
+variance_exp <- kriging_predictions_exp$predictive$variance
+
+lower_bound_exp <- mean_exp - 1.96 * sqrt(variance_exp)
+upper_bound_exp <- mean_exp + 1.96 * sqrt(variance_exp)
+
+cat("Mean predictions:", head(mean_exp))
+cat("Lower bound (95%):", head(lower_bound_exp))
+cat("Upper bound (95%):", head(upper_bound_exp))
+
+message("### Predictions for Spherical Model ###")
+kriging_predictions_sph <- krige.bayes(
+  geo_data97,
+  locations = grid_1997[, 1:2], 
+  model = kriging_bayes_sph$model,  
+  prior = list(phi.discrete = seq(0.1, 100, length = 20)),
+  output = list(simulations = TRUE)
+)
+
+mean_sph <- kriging_predictions_sph$predictive$mean
+variance_sph <- kriging_predictions_sph$predictive$variance
+
+lower_bound_sph <- mean_sph - 1.96 * sqrt(variance_sph)
+upper_bound_sph <- mean_sph + 1.96 * sqrt(variance_sph)
+
+cat("Mean predictions:", head(mean_sph))
+cat("Lower bound (95%):", head(lower_bound_sph))
+cat("Upper bound (95%):", head(upper_bound_sph))
+
+message("### Predictions for Matern (kappa = 0.3) Model ###")
+kriging_predictions_matern03 <- krige.bayes(
+  geo_data97,
+  locations = grid_1997[, 1:2],  # Utilisation explicite des deux premières colonnes
+  model = kriging_bayes_matern03$model,  # Modèle ajusté Matérn (kappa = 0.3)
+  prior = list(phi.discrete = seq(0.1, 100, length = 20)),  # Ajout de phi.discrete
+  output = list(simulations = TRUE)
+)
+
+# Moyenne et variance des prédictions
+mean_matern03 <- kriging_predictions_matern03$predictive$mean
+variance_matern03 <- kriging_predictions_matern03$predictive$variance
+
+# Calcul des intervalles de crédibilité à 95%
+lower_bound_matern03 <- mean_matern03 - 1.96 * sqrt(variance_matern03)
+upper_bound_matern03 <- mean_matern03 + 1.96 * sqrt(variance_matern03)
+
+cat("Mean predictions:", head(mean_matern03))
+cat("Lower bound (95%):", head(lower_bound_matern03))
+cat("Upper bound (95%):", head(upper_bound_matern03))
+
+message("### Predictions for Matern (kappa = 1.2) Model ###")
+kriging_predictions_matern12 <- krige.bayes(
+  geo_data97,
+  locations = grid_1997[, 1:2],  # Utilisation explicite des deux premières colonnes
+  model = kriging_bayes_matern12$model,  # Modèle ajusté Matérn (kappa = 1.2)
+  prior = list(phi.discrete = seq(0.1, 100, length = 20)),  # Ajout de phi.discrete
+  output = list(simulations = TRUE)
+)
+
+
+mean_matern12 <- kriging_predictions_matern12$predictive$mean
+variance_matern12 <- kriging_predictions_matern12$predictive$variance
+
+
+lower_bound_matern12 <- mean_matern12 - 1.96 * sqrt(variance_matern12)
+upper_bound_matern12 <- mean_matern12 + 1.96 * sqrt(variance_matern12)
+
+cat("Mean predictions:", head(mean_matern12))
+cat("Lower bound (95%):", head(lower_bound_matern12))
+cat("Upper bound (95%):", head(upper_bound_matern12))
+```
+The Bayesian Kriging results show successful convergence across exponential, spherical, and Matern (kappa = 0.3 and kappa = 1.2) models. 
+
+The posterior distributions highlight a preference for intermediate ranges (phi ≈ 5.36), especially in exponential and spherical models.
+
+All models identify a spatial range of approximately 22.2, indicating a consistent spatial structure in your data.
+
+The credibility intervals are very wide, revealing significant uncertainty, particularly in areas distant from the observation points.
+
+The Matérn model (kappa = 0.3) seems to provide more consistent predictions and slightly narrower intervals.
 
 ```{r}
 results <- data.frame(
-  grid_1997,
-  Estimate = mean_estimates,
-  Variance = variance_estimates,
-  Lower_CI = lower_bound,
-  Upper_CI = upper_bound
+  X = grid_1997[, 1],
+  Y = grid_1997[, 2],
+  Estimate = mean_matern03,       
+  Variance = variance_matern03,   
+  Lower_CI = lower_bound_matern03, 
+  Upper_CI = upper_bound_matern03 
 )
 print(results)
 ```
 ```{r}
 ggplot(results, aes(x = X, y = Y)) +
   geom_tile(aes(fill = Estimate)) +
-  geom_point(data = shrimps_geor97$coords, aes(x = X, y = Y), color = "red", size = 1) +
-  scale_fill_gradient(low = "lightblue", high = "darkblue") +
-  labs(title = "Bayesian Kriging Mean Estimates with Credibility Intervals") +
+  geom_point(data = as.data.frame(geo_data97$coords), aes(x = X, y = Y), color = "black", size = 1) +
+  scale_fill_gradient(low = "white", high = "purple") +
+  labs(
+    title = "Bayesian Kriging Mean Estimates",
+    x = "Longitude (X)",
+    y = "Latitude (Y)"
+  ) +
   theme_minimal()
+
 
 ggplot(results, aes(x = X, y = Y)) +
   geom_tile(aes(fill = Lower_CI)) +
-  geom_point(data = shrimps_geor97$coords, aes(x = X, y = Y), color = "red", size = 1) +
-  scale_fill_gradient(low = "lightblue", high = "darkblue") +
-  labs(title = "Bayesian Kriging Lower_CI") +
+  geom_point(data = as.data.frame(geo_data97$coords), aes(x = X, y = Y), color = "black", size = 1) +
+  scale_fill_gradient(low = "white", high = "purple") +
+  labs(
+    title = "Bayesian Kriging Lower_CI",
+    x = "Longitude (X)",
+    y = "Latitude (Y)"
+  ) +
   theme_minimal()
 
 ggplot(results, aes(x = X, y = Y)) +
   geom_tile(aes(fill = Upper_CI)) +
-  geom_point(data = shrimps_geor97$coords, aes(x = X, y = Y), color = "red", size = 1) +
-  scale_fill_gradient(low = "lightblue", high = "darkblue") +
-  labs(title = "Bayesian Kriging Upper_CI") +
+  geom_point(data = as.data.frame(geo_data97$coords), aes(x = X, y = Y), color = "black", size = 1) +
+  scale_fill_gradient(low = "white", high = "purple") +
+  labs(
+    title = "Bayesian Kriging Upper_CI",
+    x = "Longitude (X)",
+    y = "Latitude (Y)"
+  ) +
   theme_minimal()
 
 ggplot(results, aes(x = X, y = Y)) +
   geom_tile(aes(fill = Variance)) +
-  geom_point(data = shrimps_geor97$coords, aes(x = X, y = Y), color = "red", size = 1) +
-  scale_fill_gradient(low = "lightblue", high = "darkblue") +
-  labs(title = "Bayesian Kriging Variance") +
+  geom_point(data = as.data.frame(geo_data97$coords), aes(x = X, y = Y), color = "black", size = 1) +
+  scale_fill_gradient(low = "white", high = "purple") +
+  labs(
+    title = "Bayesian Kriging Variance",
+    x = "Longitude (X)",
+    y = "Latitude (Y)"
+  ) +
   theme_minimal()
 ```
+```{r}
+rmse <- function(observed, predicted) {
+  sqrt(mean((observed - predicted)^2))
+}
+
+bayesian_xvalid <- function(geo_data, model) {
+  n <- nrow(geo_data$coords)
+  observed <- geo_data$data
+  predictions <- numeric(n)
+  errors <- numeric(n)
+  
+  for (i in 1:n) {
+    geo_data_train <- geo_data
+    geo_data_train$coords <- geo_data$coords[-i, , drop = FALSE]
+    geo_data_train$data <- geo_data$data[-i]
+    
+    model_bayes <- krige.bayes(
+      geo_data_train,
+      model = model,
+      prior = list(
+        beta.prior = "flat",
+        sigmasq.prior = "reciprocal",
+        phi.discrete = seq(0.1, 100, length = 20)
+      ),
+      locations = geo_data$coords[i, , drop = FALSE]
+    )
+    
+    predictions[i] <- model_bayes$predictive$mean
+    errors[i] <- (observed[i] - predictions[i])^2 / model_bayes$predictive$variance
+  }
+  
+  return(mean(errors))  
+}
+
+observed <- geo_data97$data
+predictions_exp <- kriging_predictions_exp$predictive$mean          
+predictions_sph <- kriging_predictions_sph$predictive$mean        
+predictions_matern03 <- kriging_predictions_matern03$predictive$mean 
+predictions_matern12 <- kriging_predictions_matern12$predictive$mean
+
+rmse_exp <- rmse(observed, predictions_exp)
+rmse_sph <- rmse(observed, predictions_sph)
+rmse_matern03 <- rmse(observed, predictions_matern03)
+rmse_matern12 <- rmse(observed, predictions_matern12)
+
+error_bayes_exp <- bayesian_xvalid(geo_data97, list(cov.model = "exponential"))
+error_bayes_sph <- bayesian_xvalid(geo_data97, list(cov.model = "spherical"))
+error_bayes_matern03 <- bayesian_xvalid(geo_data97, list(cov.model = "matern", kappa = 0.3))
+error_bayes_matern12 <- bayesian_xvalid(geo_data97, list(cov.model = "matern", kappa = 1.2))
+
+results <- data.frame(
+  Model = c("Exponential", "Spherical", "Matern (kappa=0.3)", "Matern (kappa=1.2)"),
+  RMSE = c(rmse_exp, rmse_sph, rmse_matern03, rmse_matern12),
+  Error = c(error_bayes_exp, error_bayes_sph, error_bayes_matern03, error_bayes_matern12)
+)
+
+print(results)
+```
+
+In the HW4, we had :
+
+##          Model LogLikelihood      AIC      BIC CrossValidationError
+## 1  Exponential     -264.5553 547.1107 572.1981             1.036168
+## 2    Spherical     -264.3297 546.6593 571.7468             1.037848
+## 3     Gaussian     -264.3535 546.7070 571.7945             1.038192
+## 4 Matern (0.3)     -264.6274 547.2548 572.3423             1.036191
+## 5 Matern (1.1)     -264.4646 546.9291 572.0166             1.036472
+
+It looks that the predictions are better with the frequentist models than the Bayesian model
 
