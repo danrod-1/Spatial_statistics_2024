@@ -2,7 +2,7 @@
 title: "HW5"
 output: html_document
 author: "Daniil Rodionov, Hugo Aubert"
-date: "2024-11-09"
+date: "2024-19-09"
 ---
 
 ```{r}
@@ -161,17 +161,15 @@ cat("Upper bound (95%):", head(upper_bound_sph))
 message("### Predictions for Matern (kappa = 0.3) Model ###")
 kriging_predictions_matern03 <- krige.bayes(
   geo_data97,
-  locations = grid_1997[, 1:2],  # Utilisation explicite des deux premières colonnes
-  model = kriging_bayes_matern03$model,  # Modèle ajusté Matérn (kappa = 0.3)
-  prior = list(phi.discrete = seq(0.1, 100, length = 20)),  # Ajout de phi.discrete
+  locations = grid_1997[, 1:2], 
+  model = kriging_bayes_matern03$model,  
+  prior = list(phi.discrete = seq(0.1, 100, length = 20)), 
   output = list(simulations = TRUE)
 )
 
-# Moyenne et variance des prédictions
 mean_matern03 <- kriging_predictions_matern03$predictive$mean
 variance_matern03 <- kriging_predictions_matern03$predictive$variance
 
-# Calcul des intervalles de crédibilité à 95%
 lower_bound_matern03 <- mean_matern03 - 1.96 * sqrt(variance_matern03)
 upper_bound_matern03 <- mean_matern03 + 1.96 * sqrt(variance_matern03)
 
@@ -182,9 +180,9 @@ cat("Upper bound (95%):", head(upper_bound_matern03))
 message("### Predictions for Matern (kappa = 1.2) Model ###")
 kriging_predictions_matern12 <- krige.bayes(
   geo_data97,
-  locations = grid_1997[, 1:2],  # Utilisation explicite des deux premières colonnes
-  model = kriging_bayes_matern12$model,  # Modèle ajusté Matérn (kappa = 1.2)
-  prior = list(phi.discrete = seq(0.1, 100, length = 20)),  # Ajout de phi.discrete
+  locations = grid_1997[, 1:2],  
+  model = kriging_bayes_matern12$model,  
+  prior = list(phi.discrete = seq(0.1, 100, length = 20)),  
   output = list(simulations = TRUE)
 )
 
